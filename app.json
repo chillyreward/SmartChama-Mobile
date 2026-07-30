@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#22C55E"
       },
       "package": "co.ke.smartchama.app",
@@ -28,12 +28,6 @@
     },
     "plugins": [
       "expo-secure-store"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": "369d0cb4-c728-4a5d-8908-19bd3026c4aa"
-      }
-    },
-    "owner": "chilly_reward1"
+    ]
   }
 }
