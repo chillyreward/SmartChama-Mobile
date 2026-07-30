@@ -2,6 +2,7 @@
   "expo": {
     "name": "SmartChama",
     "slug": "smartchama",
+    "owner": "chilly_reward1",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
