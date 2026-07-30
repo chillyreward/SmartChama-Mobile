@@ -1,0 +1,10 @@
+# Ignore all files outside the Expo project
+node_modules/
+.expo/
+dist/
+web-build/
+*.apk
+*.aab
+*.tmp
+AppData/
+**/AppData/**
