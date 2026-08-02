@@ -9,25 +9,93 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { colors } from '../theme/colors';
+import { useQuery } from '@tanstack/react-query';
+
+import { GroupSwitcherModal } from '../components/GroupSwitcherModal';
 
 export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { session, member, group, refreshAuth } = useAuth();
+  const { colors, isDark } = useTheme();
 
-  const [loading, setLoading] = useState(true);
+  const [switcherVisible, setSwitcherVisible] = useState(false);
+
+  const { data: dashboardData, isLoading, dataUpdatedAt, refetch } = useQuery({
+    queryKey: ['dashboardData', group?.id, member?.id],
+    queryFn: async () => {
+      if (!group?.id || !member?.id || !session?.user?.id) {
+        return {
+          walletBalance: 0,
+          myContributionsSum: 0,
+          activeLoansCount: 0,
+          activeLoansTotal: 0,
+          unreadNotifications: 0,
+          recentTransactions: [],
+        };
+      }
+
+      const { data: wallet } = await supabase
+        .from('wallets')
+        .select('balance')
+        .eq('chama_id', group.id)
+        .maybeSingle();
+
+      const { data: contribs } = await supabase
+        .from('contributions_v2')
+        .select('amount')
+        .eq('membership_id', member.id)
+        .eq('status', 'confirmed');
+
+      const sumContribs = contribs?.reduce((acc, c) => acc + Number(c.amount || 0), 0) || 0;
+
+      const { data: loans } = await supabase
+        .from('loans_v2')
+        .select('amount')
+        .eq('membership_id', member.id)
+        .eq('status', 'active');
+
+      const countLoans = loans?.length || 0;
+      const sumLoans = loans?.reduce((acc, l) => acc + Number(l.amount || 0), 0) || 0;
+
+      const { count: countNotifs } = await supabase
+        .from('notifications')
+        .select('id', { count: 'exact', head: true })
+        .eq('profile_id', session.user.id)
+        .eq('read', false);
+
+      const { data: txs } = await supabase
+        .from('transactions_v2')
+        .select('*')
+        .eq('chama_id', group.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      return {
+        walletBalance: Number(wallet?.balance || 0),
+        myContributionsSum: sumContribs,
+        activeLoansCount: countLoans,
+        activeLoansTotal: sumLoans,
+        unreadNotifications: countNotifs || 0,
+        recentTransactions: txs || [],
+      };
+    },
+    enabled: !!group?.id && !!member?.id,
+  });
+
   const [refreshing, setRefreshing] = useState(false);
 
-  // Data States
-  const [walletBalance, setWalletBalance] = useState<number>(0);
-  const [myContributionsSum, setMyContributionsSum] = useState<number>(0);
-  const [activeLoansCount, setActiveLoansCount] = useState<number>(0);
-  const [activeLoansTotal, setActiveLoansTotal] = useState<number>(0);
-  const [unreadNotifications, setUnreadNotifications] = useState<number>(0);
-  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const walletBalance = dashboardData?.walletBalance || 0;
+  const myContributionsSum = dashboardData?.myContributionsSum || 0;
+  const activeLoansCount = dashboardData?.activeLoansCount || 0;
+  const activeLoansTotal = dashboardData?.activeLoansTotal || 0;
+  const unreadNotifications = dashboardData?.unreadNotifications || 0;
+  const recentTransactions = dashboardData?.recentTransactions || [];
+  const loading = isLoading;
 
-  // Time-aware greeting
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Good morning';
@@ -37,103 +105,45 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   const firstName = member?.profiles?.full_name?.split(' ')[0] || 'Member';
 
-  const fetchDashboardData = async () => {
-    if (!group?.id || !member?.id || !session?.user?.id) {
-      setLoading(false);
-      return;
-    }
-
-    try {
-      // 1. Fetch Wallet Balance
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('chama_id', group.id)
-        .maybeSingle();
-
-      if (wallet) {
-        setWalletBalance(Number(wallet.balance) || 0);
-      }
-
-      // 2. Fetch My Contributions Sum
-      const { data: contribs } = await supabase
-        .from('contributions_v2')
-        .select('amount')
-        .eq('membership_id', member.id)
-        .eq('status', 'confirmed');
-
-      if (contribs) {
-        const sum = contribs.reduce((acc, c) => acc + Number(c.amount || 0), 0);
-        setMyContributionsSum(sum);
-      }
-
-      // 3. Fetch Active Loans
-      const { data: loans } = await supabase
-        .from('loans_v2')
-        .select('amount')
-        .eq('membership_id', member.id)
-        .eq('status', 'active');
-
-      if (loans) {
-        setActiveLoansCount(loans.length);
-        const sumLoans = loans.reduce((acc, l) => acc + Number(l.amount || 0), 0);
-        setActiveLoansTotal(sumLoans);
-      }
-
-      // 4. Fetch Unread Notifications
-      const { count } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('profile_id', session.user.id)
-        .eq('read', false);
-
-      setUnreadNotifications(count || 0);
-
-      // 5. Fetch Recent Transactions
-      const { data: txs } = await supabase
-        .from('transactions_v2')
-        .select('*')
-        .eq('chama_id', group.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (txs) {
-        setRecentTransactions(txs);
-      }
-    } catch (err) {
-      console.error('Error loading dashboard data:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-  }, [group?.id, member?.id]);
-
   const onRefresh = async () => {
     setRefreshing(true);
     await refreshAuth();
-    await fetchDashboardData();
+    await refetch();
+    setRefreshing(false);
+  };
+
+  const getTimeAgo = () => {
+    if (!dataUpdatedAt) return null;
+    const diffMinutes = Math.floor((Date.now() - dataUpdatedAt) / (1000 * 60));
+    if (diffMinutes < 1) return 'Just now';
+    return `${diffMinutes} min ago`;
   };
 
   const formatCurrency = (val: number) =>
     val.toLocaleString('en-KE', { maximumFractionDigits: 0 });
 
+  // Target yearly contribution goal
+  const targetGoal = 50000;
+  const progressPercent = Math.min(100, Math.round((myContributionsSum / targetGoal) * 100));
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.skeletonContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading Dashboard...</Text>
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading Dashboard...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <GroupSwitcherModal
+        visible={switcherVisible}
+        onClose={() => setSwitcherVisible(false)}
+      />
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
@@ -143,14 +153,29 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         {/* Section 1: Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
               {getGreeting()}, {firstName} 👋
             </Text>
-            <Text style={styles.chamaSubtitle}>{group?.name || 'SmartChama Group'}</Text>
+            <TouchableOpacity
+              onPress={() => setSwitcherVisible(true)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chamaSubtitle, { color: colors.text, fontWeight: 'bold' }]}>
+                {group?.name || 'My Chama'}
+              </Text>
+              <Ionicons name="chevron-down" size={14} color={colors.primary} />
+            </TouchableOpacity>
+            {getTimeAgo() && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
+                <Text style={{ fontSize: 11, color: colors.textSecondary }}>Last updated {getTimeAgo()}</Text>
+              </View>
+            )}
           </View>
 
-          <TouchableOpacity style={styles.bellButton}>
-            <Text style={{ fontSize: 22 }}>🔔</Text>
+          <TouchableOpacity style={[styles.bellButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.navigate('Alerts')}>
+            <Ionicons name="notifications-outline" size={22} color={colors.text} />
             {unreadNotifications > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -161,133 +186,167 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
           </TouchableOpacity>
         </View>
 
-        {/* Section 2: Balance Card */}
-        <View style={styles.balanceCard}>
-          <Text style={styles.balanceLabel}>Total Chama Balance</Text>
+        {/* Section 2: Balance Hero Card */}
+        <View style={[styles.balanceCard, { backgroundColor: isDark ? '#0F172A' : '#1E293B' }]}>
+          <Text style={styles.balanceLabel}>TOTAL CHAMA BALANCE</Text>
           <Text style={styles.balanceAmount}>KES {formatCurrency(walletBalance)}</Text>
           <View style={styles.balanceFooter}>
-            <Text style={styles.balanceSubtext}>🔒 Vault Encrypted Wallet</Text>
+            <View style={styles.shieldRow}>
+              <Ionicons name="shield-checkmark" size={14} color="#22C55E" />
+              <Text style={styles.balanceSubtext}>Vault Encrypted Wallet</Text>
+            </View>
             <Text style={styles.balanceSubtext}>Role: {member?.role || 'Member'}</Text>
           </View>
         </View>
 
-        {/* Section 3: Quick Actions Row */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        {/* Section 3: Circular Contribution Progress Card */}
+        <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.progressInfo}>
+            <Text style={[styles.progressTitle, { color: colors.textSecondary }]}>ANNUAL SAVINGS GOAL</Text>
+            <Text style={[styles.progressAmount, { color: colors.text }]}>KES {formatCurrency(myContributionsSum)}</Text>
+            <Text style={[styles.progressSub, { color: colors.textSecondary }]}>Goal: KES {formatCurrency(targetGoal)}</Text>
+          </View>
+
+          <View style={styles.svgWrapper}>
+            <Svg width="72" height="72" viewBox="0 0 100 100">
+              <Circle cx="50" cy="50" r="40" stroke={isDark ? '#334155' : '#E2E8F0'} strokeWidth="10" fill="none" />
+              <Circle
+                cx="50"
+                cy="50"
+                r="40"
+                stroke={colors.primary}
+                strokeWidth="10"
+                fill="none"
+                strokeDasharray={`${251 * (progressPercent / 100)} 251`}
+                strokeLinecap="round"
+                transform="rotate(-90 50 50)"
+              />
+            </Svg>
+            <Text style={[styles.percentText, { color: colors.primary }]}>{progressPercent}%</Text>
+          </View>
+        </View>
+
+        {/* Section 4: Quick Actions Row */}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsRow}>
           <TouchableOpacity
-            style={styles.actionItem}
+            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Contribute')}
           >
-            <View style={[styles.actionIcon, { backgroundColor: '#E0F2FE' }]}>
-              <Text style={{ fontSize: 24 }}>💳</Text>
+            <View style={[styles.actionIcon, { backgroundColor: '#DCFCE7' }]}>
+              <Ionicons name="card" size={22} color="#16A34A" />
             </View>
-            <Text style={styles.actionLabel}>Contribute</Text>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Contribute</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.actionItem}
+            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={() => navigation.navigate('Loans')}
           >
             <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
-              <Text style={{ fontSize: 24 }}>🏦</Text>
+              <Ionicons name="cash" size={22} color="#D97706" />
             </View>
-            <Text style={styles.actionLabel}>Request Loan</Text>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Request Loan</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionItem}>
-            <View style={[styles.actionIcon, { backgroundColor: '#DCFCE7' }]}>
-              <Text style={{ fontSize: 24 }}>💸</Text>
+          <TouchableOpacity
+            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => navigation.navigate('Wallet')}
+          >
+            <View style={[styles.actionIcon, { backgroundColor: '#E0F2FE' }]}>
+              <Ionicons name="send" size={22} color="#0284C7" />
             </View>
-            <Text style={styles.actionLabel}>Send Money</Text>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Send Money</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionItem}>
+          <TouchableOpacity
+            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => navigation.navigate('Wallet')}
+          >
             <View style={[styles.actionIcon, { backgroundColor: '#F3E8FF' }]}>
-              <Text style={{ fontSize: 24 }}>📄</Text>
+              <Ionicons name="document-text" size={22} color="#9333EA" />
             </View>
-            <Text style={styles.actionLabel}>Statement</Text>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Statement</Text>
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Section 4: Stats Grid (2x2) */}
-        <Text style={styles.sectionTitle}>Overview</Text>
-        <View style={styles.statsGrid}>
-          {/* Card 1: My Contributions */}
-          <View style={styles.statCard}>
-            <Text style={styles.statCardTitle}>MY SAVINGS</Text>
-            <Text style={styles.statCardValue}>KES {formatCurrency(myContributionsSum)}</Text>
-            <Text style={styles.statCardSub}>Confirmed Payments</Text>
+        {/* Section 5: Overview Metric Strip */}
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.metricStrip}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="wallet-outline" size={20} color={colors.primary} />
+            <Text style={[styles.statCardTitle, { color: colors.textSecondary }]}>MY SAVINGS</Text>
+            <Text style={[styles.statCardValue, { color: colors.text }]}>KES {formatCurrency(myContributionsSum)}</Text>
+            <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>Confirmed Payments</Text>
           </View>
 
-          {/* Card 2: Trust Score */}
-          <View style={styles.statCard}>
-            <Text style={styles.statCardTitle}>TRUST SCORE</Text>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="star-outline" size={20} color={colors.primary} />
+            <Text style={[styles.statCardTitle, { color: colors.textSecondary }]}>TRUST SCORE</Text>
             <Text style={[styles.statCardValue, { color: colors.primary }]}>
               {member?.trust_score || 100} / 100
             </Text>
-            <Text style={styles.statCardSub}>⭐ High Credibility</Text>
+            <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>High Credibility</Text>
           </View>
 
-          {/* Card 3: Active Loans */}
-          <View style={styles.statCard}>
-            <Text style={styles.statCardTitle}>ACTIVE LOANS</Text>
-            <Text style={styles.statCardValue}>
+          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
+            <Text style={[styles.statCardTitle, { color: colors.textSecondary }]}>ACTIVE LOANS</Text>
+            <Text style={[styles.statCardValue, { color: colors.text }]}>
               {activeLoansCount > 0 ? `KES ${formatCurrency(activeLoansTotal)}` : 'None'}
             </Text>
-            <Text style={styles.statCardSub}>
+            <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>
               {activeLoansCount} Active Loan{activeLoansCount === 1 ? '' : 's'}
             </Text>
           </View>
+        </ScrollView>
 
-          {/* Card 4: Next Contribution */}
-          <View style={styles.statCard}>
-            <Text style={styles.statCardTitle}>NEXT DUE</Text>
-            <Text style={styles.statCardValue}>
-              KES {formatCurrency(group?.contribution_amount || 1000)}
-            </Text>
-            <Text style={styles.statCardSub}>Due End of Month</Text>
-          </View>
-        </View>
-
-        {/* Section 5: Recent Transactions */}
+        {/* Section 6: Recent Transactions */}
         <View style={styles.txHeader}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('More')}>
-            <Text style={styles.viewAllText}>View All</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('History')}>
+            <Text style={[styles.viewAllText, { color: colors.primary }]}>View All</Text>
           </TouchableOpacity>
         </View>
 
-        {recentTransactions.length > 0 ? (
+        {recentTransactions.length === 0 ? (
+          <View style={[styles.emptyTxBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Ionicons name="receipt-outline" size={36} color={colors.textSecondary} />
+            <Text style={[styles.emptyTxText, { color: colors.textSecondary }]}>No recent group transactions found</Text>
+          </View>
+        ) : (
           recentTransactions.map((tx) => (
-            <View key={tx.id} style={styles.txRow}>
-              <View style={styles.txIconBox}>
-                <Text style={{ fontSize: 20 }}>
-                  {tx.type === 'contribution' ? '📥' : '📤'}
-                </Text>
+            <View key={tx.id} style={[styles.txRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View
+                style={[
+                  styles.txIconBox,
+                  { backgroundColor: tx.type === 'contribution' ? '#DCFCE7' : '#FEE2E2' },
+                ]}
+              >
+                <Ionicons
+                  name={tx.type === 'contribution' ? 'arrow-down' : 'arrow-up'}
+                  size={18}
+                  color={tx.type === 'contribution' ? '#16A34A' : '#DC2626'}
+                />
               </View>
               <View style={styles.txInfo}>
-                <Text style={styles.txTitle}>{tx.description || tx.type}</Text>
-                <Text style={styles.txDate}>
-                  {new Date(tx.created_at).toLocaleDateString('en-GB', {
-                    day: 'numeric',
-                    month: 'short',
-                  })}
+                <Text style={[styles.txTitle, { color: colors.text }]}>
+                  {tx.description || (tx.type === 'contribution' ? 'Member Contribution' : 'Chama Loan Disbursal')}
+                </Text>
+                <Text style={[styles.txDate, { color: colors.textSecondary }]}>
+                  {new Date(tx.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })}
                 </Text>
               </View>
               <Text
                 style={[
                   styles.txAmount,
-                  { color: tx.type === 'contribution' ? colors.primary : '#EF4444' },
+                  { color: tx.type === 'contribution' ? '#16A34A' : colors.text },
                 ]}
               >
-                {tx.type === 'contribution' ? '+' : '-'} KES {formatCurrency(tx.amount)}
+                {tx.type === 'contribution' ? '+' : '-'}KES {formatCurrency(Number(tx.amount))}
               </Text>
             </View>
           ))
-        ) : (
-          <View style={styles.emptyTxBox}>
-            <Text style={styles.emptyTxText}>No recent transactions recorded</Text>
-          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -297,7 +356,9 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.light,
+  },
+  scrollContent: {
+    padding: 16,
   },
   skeletonContainer: {
     flex: 1,
@@ -307,47 +368,37 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: colors.textSecondary.light,
-  },
-  scrollContent: {
-    padding: 20,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 10,
+    marginBottom: 16,
   },
   greeting: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: colors.text.light,
   },
   chamaSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
+    fontSize: 13,
     marginTop: 2,
   },
   bellButton: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 14,
-    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: colors.border.light,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
+    top: 4,
+    right: 4,
+    backgroundColor: '#EF4444',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
   },
   badgeText: {
     color: '#FFFFFF',
@@ -355,124 +406,150 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   balanceCard: {
-    backgroundColor: colors.primary,
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 24,
-    shadowColor: '#22C55E',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
   },
   balanceLabel: {
-    color: '#DCFCE7',
-    fontSize: 13,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   balanceAmount: {
     color: '#FFFFFF',
     fontSize: 32,
     fontWeight: 'bold',
-    marginVertical: 8,
+    marginVertical: 6,
   },
   balanceFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginTop: 8,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  shieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   balanceSubtext: {
-    color: '#F0FDF4',
+    color: '#CBD5E1',
+    fontSize: 11,
+  },
+  progressCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  progressInfo: {
+    flex: 1,
+  },
+  progressTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  progressAmount: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginVertical: 4,
+  },
+  progressSub: {
     fontSize: 12,
-    fontWeight: '600',
+  },
+  svgWrapper: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  percentText: {
+    position: 'absolute',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: colors.text.light,
     marginBottom: 12,
+    marginTop: 4,
   },
   quickActionsRow: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   actionItem: {
     alignItems: 'center',
-    marginRight: 18,
+    justifyContent: 'center',
+    width: 86,
+    height: 86,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginRight: 10,
   },
   actionIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
   },
   actionLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
-    color: colors.text.light,
   },
-  statsGrid: {
+  metricStrip: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   statCard: {
-    width: '48%',
-    backgroundColor: colors.card.light,
-    borderRadius: 18,
-    padding: 16,
+    width: 140,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: colors.border.light,
+    padding: 14,
+    marginRight: 10,
   },
   statCardTitle: {
     fontSize: 10,
-    fontWeight: '700',
-    color: colors.textSecondary.light,
+    fontWeight: 'bold',
     letterSpacing: 0.5,
+    marginTop: 8,
   },
   statCardValue: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: colors.text.light,
-    marginVertical: 6,
+    marginVertical: 4,
   },
   statCardSub: {
-    fontSize: 11,
-    color: colors.textSecondary.light,
+    fontSize: 10,
   },
   txHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 8,
   },
   viewAllText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card.light,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: colors.border.light,
   },
   txIconBox: {
-    width: 42,
-    height: 42,
+    width: 38,
+    height: 38,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
@@ -481,29 +558,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   txTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text.light,
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   txDate: {
-    fontSize: 12,
-    color: colors.textSecondary.light,
+    fontSize: 11,
     marginTop: 2,
   },
   txAmount: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   emptyTxBox: {
-    backgroundColor: colors.card.light,
     borderRadius: 16,
     padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.border.light,
   },
   emptyTxText: {
-    color: colors.textSecondary.light,
     fontSize: 13,
+    marginTop: 8,
   },
 });

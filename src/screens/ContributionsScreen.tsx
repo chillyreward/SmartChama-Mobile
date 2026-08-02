@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import * as LocalAuthentication from 'expo-local-authentication';
 import {
   View,
   Text,
@@ -11,8 +12,11 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 
@@ -20,6 +24,7 @@ const API_BASE_URL = 'https://smart-chama10.vercel.app';
 
 export const ContributionsScreen: React.FC = () => {
   const { session, member, group, refreshAuth } = useAuth();
+  const { colors: themeColors, isDark } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,6 +98,40 @@ export const ContributionsScreen: React.FC = () => {
     await fetchContributionsData();
   };
 
+  /**
+   * Checks biometric hardware & enrollment, then prompts the user.
+   * Returns true if auth passed (or device has no biometrics — fail-open).
+   */
+  const requireBiometricAuth = useCallback(async (): Promise<boolean> => {
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      if (!hasHardware) return true; // No sensor — skip silently
+
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!isEnrolled) return true; // No fingerprints set up — skip silently
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Confirm with fingerprint to pay',
+        fallbackLabel: 'Use PIN instead',
+        cancelLabel: 'Cancel',
+        disableDeviceFallback: false,
+      });
+
+      if (!result.success) {
+        Alert.alert(
+          'Authentication Failed',
+          'Fingerprint not recognised. Payment cancelled.',
+          [{ text: 'OK' }]
+        );
+        return false;
+      }
+      return true;
+    } catch {
+      // If biometric check itself throws, fail-open so payments still work
+      return true;
+    }
+  }, []);
+
   // Trigger M-Pesa STK Push
   const handlePayViaMpesa = async () => {
     const numAmount = Number(amount);
@@ -109,6 +148,10 @@ export const ContributionsScreen: React.FC = () => {
       Alert.alert('Invalid Phone', 'Please enter a valid phone number (07XXXXXXXX or 254XXXXXXXXX).');
       return;
     }
+
+    // 🔐 Biometric gate — must pass before STK push is sent
+    const authOk = await requireBiometricAuth();
+    if (!authOk) return;
 
     setStkStatus('sending');
     setStatusMessage('Initiating M-Pesa STK Push...');
@@ -154,8 +197,10 @@ export const ContributionsScreen: React.FC = () => {
         if (latestContrib && latestContrib.status === 'confirmed') {
           clearInterval(interval);
           setStkStatus('success');
-          setStatusMessage(`Payment Received! Receipt: ${latestContrib.mpesa_receipt || 'Confirmed'}`);
+          const receiptNo = latestContrib.mpesa_receipt || 'Confirmed';
+          setStatusMessage(`Payment Received! Receipt: ${receiptNo}`);
           fetchContributionsData();
+          sendWhatsAppConfirmation(receiptNo, numAmount);
           return;
         }
 
@@ -170,6 +215,25 @@ export const ContributionsScreen: React.FC = () => {
       setStkStatus('idle');
       Alert.alert('Payment Error', err.message || 'M-Pesa STK push failed.');
     }
+  };
+
+  const sendWhatsAppConfirmation = (receipt: string, amountVal: string | number) => {
+    let adminPhone = (group as any)?.admin_phone || member?.profiles?.phone_number || '';
+    adminPhone = adminPhone.replace(/\s/g, '');
+    if (adminPhone.startsWith('+')) adminPhone = adminPhone.slice(1);
+    if (adminPhone.startsWith('0')) adminPhone = '254' + adminPhone.slice(1);
+    if (!adminPhone.startsWith('254') && adminPhone.length > 0) adminPhone = '254' + adminPhone;
+
+    const msg = `Hi, I just paid KSh ${amountVal} contribution for ${group?.name || 'SmartChama'} via SmartChama. Ref: ${receipt}`;
+    const url = `whatsapp://send?phone=${adminPhone}&text=${encodeURIComponent(msg)}`;
+
+    Linking.canOpenURL(url).then((ok) => {
+      if (ok) {
+        Linking.openURL(url);
+      } else {
+        Linking.openURL(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`);
+      }
+    }).catch((err) => console.log('WhatsApp link error:', err));
   };
 
   const formatCurrency = (val: number) =>
@@ -323,7 +387,14 @@ export const ContributionsScreen: React.FC = () => {
                 <Text style={styles.stkSuccessTitle}>Payment Received!</Text>
                 <Text style={styles.stkWaitingMessage}>{statusMessage}</Text>
                 <TouchableOpacity
-                  style={styles.stkSubmitButton}
+                  style={[styles.stkSubmitButton, { backgroundColor: '#25D366', flexDirection: 'row', gap: 8 }]}
+                  onPress={() => sendWhatsAppConfirmation(statusMessage.split('Receipt: ')[1] || 'Confirmed', amount)}
+                >
+                  <Ionicons name="logo-whatsapp" size={20} color="#FFFFFF" />
+                  <Text style={styles.stkSubmitText}>Share on WhatsApp</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.stkSubmitButton, { backgroundColor: colors.primary, marginTop: 8 }]}
                   onPress={() => setModalVisible(false)}
                 >
                   <Text style={styles.stkSubmitText}>Done</Text>

@@ -1,46 +1,60 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { ContributionsScreen } from '../screens/ContributionsScreen';
 import { LoansScreen } from '../screens/LoansScreen';
 import { WalletScreen } from '../screens/WalletScreen';
+import { ChatScreen } from '../screens/ChatScreen';
 import { MoreScreen } from '../screens/MoreScreen';
-import { colors } from '../theme/colors';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Tab = createBottomTabNavigator();
 
-const tabIcons: Record<string, string> = {
-  Home: '🏠',
-  Contribute: '💳',
-  Loans: '🏦',
-  Wallet: '👛',
-  More: '⣿',
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const tabIconNames: Record<string, { active: IconName; inactive: IconName }> = {
+  Home: { active: 'home', inactive: 'home-outline' },
+  Contribute: { active: 'card', inactive: 'card-outline' },
+  Loans: { active: 'cash', inactive: 'cash-outline' },
+  Wallet: { active: 'wallet', inactive: 'wallet-outline' },
+  Chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
+  More: { active: 'grid', inactive: 'grid-outline' },
 };
 
 export const MainTabs: React.FC = () => {
+  const { colors, isDark } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarInactiveTintColor: isDark ? '#64748B' : '#94A3B8',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          paddingBottom: 4,
+        },
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: colors.border.light,
-          height: 60,
+          backgroundColor: colors.card,
+          borderTopColor: colors.border,
+          height: 64,
           paddingBottom: 8,
           paddingTop: 6,
         },
-        tabBarIcon: () => (
-          <Text style={{ fontSize: 20 }}>{tabIcons[route.name] || '📱'}</Text>
-        ),
+        tabBarIcon: ({ focused, color, size }) => {
+          const icons = tabIconNames[route.name] || { active: 'appstore', inactive: 'appstore-outline' };
+          const iconName = focused ? icons.active : icons.inactive;
+          return <Ionicons name={iconName} size={22} color={color} />;
+        },
       })}
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
       <Tab.Screen name="Contribute" component={ContributionsScreen} />
       <Tab.Screen name="Loans" component={LoansScreen} />
       <Tab.Screen name="Wallet" component={WalletScreen} />
+      <Tab.Screen name="Chat" component={ChatScreen} />
       <Tab.Screen name="More" component={MoreScreen} />
     </Tab.Navigator>
   );

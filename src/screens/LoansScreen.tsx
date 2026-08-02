@@ -13,13 +13,17 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { EmptyState } from '../components/EmptyState';
 
 const API_BASE_URL = 'https://smart-chama10.vercel.app';
 
 export const LoansScreen: React.FC = () => {
   const { session, member, group, refreshAuth } = useAuth();
+  const { isDark } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -206,10 +210,37 @@ export const LoansScreen: React.FC = () => {
       if (!res.ok) throw new Error(data.error || 'M-Pesa push failed');
 
       setStkStatus('waiting');
-      setTimeout(() => {
-        setStkStatus('success');
-        fetchLoansData();
-      }, 6000);
+      const targetLoanId = selectedLoan?.id;
+      let attempts = 0;
+      const maxAttempts = 20; // 20 * 3s = 60s total
+
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        try {
+          if (targetLoanId) {
+            const { data: updatedLoan } = await supabase
+              .from('loans_v2')
+              .select('status, balance')
+              .eq('id', targetLoanId)
+              .maybeSingle();
+
+            if (updatedLoan && (updatedLoan.status === 'repaid' || Number(updatedLoan.balance) < Number(selectedLoan.balance))) {
+              clearInterval(pollInterval);
+              setStkStatus('success');
+              fetchLoansData();
+              return;
+            }
+          }
+        } catch (pollErr) {
+          console.error('Loan polling error:', pollErr);
+        }
+
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          setStkStatus('success');
+          fetchLoansData();
+        }
+      }, 3000);
     } catch (err: any) {
       setStkStatus('idle');
       Alert.alert('Repayment Error', err.message || 'Failed to initiate M-Pesa repayment.');
@@ -248,6 +279,19 @@ export const LoansScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Chama Loans</Text>
           <Text style={styles.headerSub}>{group?.name || 'SmartChama Credit'}</Text>
+        </View>
+
+        {/* Tutorial Banner */}
+        <View style={[styles.tutorialCard, { backgroundColor: isDark ? '#1E293B' : '#FEF3C7', borderColor: isDark ? '#334155' : '#FDE68A' }]}>
+          <View style={styles.tutorialHeader}>
+            <Ionicons name="sparkles-outline" size={20} color="#D97706" />
+            <Text style={[styles.tutorialTitle, { color: isDark ? '#FDE68A' : '#92400E' }]}>
+              Credit & Approval Policy
+            </Text>
+          </View>
+          <Text style={[styles.tutorialText, { color: isDark ? '#FEF3C7' : '#78350F' }]}>
+            Loan limit is dynamically computed from your Trust Score. Loans incur a 5% flat interest rate and require multi-officer approval before instant M-Pesa disbursal.
+          </Text>
         </View>
 
         {/* Section 1: Loan Summary Card */}
@@ -344,9 +388,13 @@ export const LoansScreen: React.FC = () => {
             );
           })
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No active or pending loans found</Text>
-          </View>
+          <EmptyState
+            icon="cash-outline"
+            title="No Active Loans"
+            description="You do not have any active or pending loan requests."
+            actionLabel="Apply for Loan"
+            onAction={() => setModalVisible(true)}
+          />
         )}
 
         {/* Section 4: Loan History */}
@@ -373,9 +421,11 @@ export const LoansScreen: React.FC = () => {
             );
           })
         ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No completed loan history</Text>
-          </View>
+          <EmptyState
+            icon="checkmark-circle-outline"
+            title="No History"
+            description="You have no repaid or archived loan records."
+          />
         )}
       </ScrollView>
 
@@ -848,5 +898,25 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  tutorialCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  tutorialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  tutorialTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  tutorialText: {
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

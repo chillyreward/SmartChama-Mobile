@@ -8,24 +8,29 @@ interface AuthContextType {
   session: Session | null;
   member: (ChamaMembership & { profiles?: Profile }) | null;
   group: Chama | null;
+  userMemberships: Array<ChamaMembership & { profiles?: Profile; chamas_v2?: Chama }>;
   isLoading: boolean;
   signOut: () => Promise<void>;
   refreshAuth: () => Promise<void>;
+  switchActiveGroup: (chamaId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
   session: null,
   member: null,
   group: null,
+  userMemberships: [],
   isLoading: true,
   signOut: async () => {},
   refreshAuth: async () => {},
+  switchActiveGroup: () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [member, setMember] = useState<(ChamaMembership & { profiles?: Profile }) | null>(null);
   const [group, setGroup] = useState<Chama | null>(null);
+  const [userMemberships, setUserMemberships] = useState<Array<ChamaMembership & { profiles?: Profile; chamas_v2?: Chama }>>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const fetchUserData = async (userId: string) => {
@@ -47,12 +52,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (memberships && memberships.length > 0) {
-        const currentMembership = memberships[0];
-        const currentGroup = currentMembership.chamas_v2 as Chama;
+        const typedMemberships = memberships as Array<ChamaMembership & { profiles?: Profile; chamas_v2?: Chama }>;
+        setUserMemberships(typedMemberships);
+
+        // Keep current group if already selected, otherwise default to first
+        const selectedId = group?.id;
+        const matched = selectedId
+          ? typedMemberships.find((m) => m.chama_id === selectedId) || typedMemberships[0]
+          : typedMemberships[0];
+
+        const currentGroup = matched.chamas_v2 as Chama;
 
         setMember({
-          ...currentMembership,
-          profiles: currentMembership.profiles as Profile,
+          ...matched,
+          profiles: matched.profiles as Profile,
         });
         setGroup(currentGroup || null);
 
@@ -64,11 +77,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log('Push notification registration skipped:', pushErr);
         }
       } else {
+        setUserMemberships([]);
         setMember(null);
         setGroup(null);
       }
     } catch (err) {
       console.error('Unexpected error fetching user data:', err);
+    }
+  };
+
+  const switchActiveGroup = (chamaId: string) => {
+    const matched = userMemberships.find((m) => m.chama_id === chamaId);
+    if (matched) {
+      const currentGroup = matched.chamas_v2 as Chama;
+      setMember({
+        ...matched,
+        profiles: matched.profiles as Profile,
+      });
+      setGroup(currentGroup || null);
     }
   };
 
@@ -107,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (newSession?.user?.id) {
           await fetchUserData(newSession.user.id);
         } else {
+          setUserMemberships([]);
           setMember(null);
           setGroup(null);
         }
@@ -126,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await supabase.auth.signOut();
       await SecureStore.deleteItemAsync('supabase.auth.token').catch(() => {});
       setSession(null);
+      setUserMemberships([]);
       setMember(null);
       setGroup(null);
     } catch (err) {
@@ -141,9 +169,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         member,
         group,
+        userMemberships,
         isLoading,
         signOut,
         refreshAuth,
+        switchActiveGroup,
       }}
     >
       {children}

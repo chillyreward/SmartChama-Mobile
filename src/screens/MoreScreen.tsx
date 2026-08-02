@@ -8,51 +8,75 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { colors } from '../theme/colors';
+import { useTheme } from '../contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 
-const extraFeatures = [
-  { icon: '🐷', label: 'Merry-Go-Round', route: '' },
-  { icon: '👥', label: 'Members', route: 'Members' },
-  { icon: '🧾', label: 'History', route: '' },
-  { icon: '📈', label: 'SmartGrow', route: '' },
-  { icon: '📊', label: 'Analytics', route: '' },
-  { icon: '🛡️', label: 'Trust Score', route: '' },
-  { icon: '🔔', label: 'Alerts', route: '' },
-  { icon: '🤝', label: 'Welfare Fund', route: '' },
-  { icon: '⚙️', label: 'Settings', route: 'Profile' },
-  { icon: '👤', label: 'Profile', route: 'Profile' },
+interface FeatureItem {
+  iconName: keyof typeof Ionicons.glyphMap;
+  label: string;
+  subtitle: string;
+  route: string;
+}
+
+const extraFeatures: FeatureItem[] = [
+  { iconName: 'chatbubbles', label: 'Group Chat', subtitle: 'Discussions & notices', route: 'Chat' },
+  { iconName: 'refresh-circle', label: 'Merry-Go-Round', subtitle: 'Rotating payout pot', route: 'MerryGoRound' },
+  { iconName: 'people', label: 'Members', subtitle: 'Group member roster', route: 'Members' },
+  { iconName: 'receipt', label: 'History', subtitle: 'All transaction logs', route: 'History' },
+  { iconName: 'trending-up', label: 'SmartGrow', subtitle: 'Investment proposals', route: 'SmartGrow' },
+  { iconName: 'bar-chart', label: 'Analytics', subtitle: 'Savings & loan charts', route: 'Analytics' },
+  { iconName: 'shield-checkmark', label: 'Trust Score', subtitle: 'Member credibility', route: 'TrustScore' },
+  { iconName: 'notifications', label: 'Alerts', subtitle: 'Group notifications', route: 'Alerts' },
+  { iconName: 'heart', label: 'Welfare Fund', subtitle: 'Emergency support claims', route: 'Welfare' },
+  { iconName: 'settings', label: 'Settings', subtitle: 'App preferences', route: 'Profile' },
+  { iconName: 'person-circle', label: 'Profile', subtitle: 'Personal profile & KYC', route: 'Profile' },
 ];
 
 export const MoreScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const { signOut } = useAuth();
+  const { colors, isDark } = useTheme();
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>All Features</Text>
-        <Text style={styles.subtitle}>SmartChama Chama Services</Text>
+        <Text style={[styles.title, { color: colors.text }]}>All Services</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>SmartChama Chama Modules & Tools</Text>
 
         <View style={styles.grid}>
           {extraFeatures.map((item, index) => (
             <TouchableOpacity
               key={index}
-              style={styles.gridItem}
+              style={[
+                styles.gridItem,
+                { backgroundColor: colors.card, borderColor: colors.border }
+              ]}
               onPress={() => {
                 if (item.route && navigation) {
                   navigation.navigate(item.route);
                 }
               }}
+              activeOpacity={0.7}
             >
-              <View style={styles.iconBox}>
-                <Text style={{ fontSize: 24 }}>{item.icon}</Text>
+              <View style={[styles.iconBox, { backgroundColor: isDark ? '#1F2937' : '#F8FAFC' }]}>
+                <Ionicons name={item.iconName} size={22} color={colors.primary} />
               </View>
-              <Text style={styles.itemLabel}>{item.label}</Text>
+              <View style={styles.textContainer}>
+                <Text style={[styles.itemLabel, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]}>{item.subtitle}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
 
-        <TouchableOpacity style={styles.signOutButton} onPress={signOut}>
-          <Text style={styles.signOutText}>🚪 Sign Out</Text>
+        <TouchableOpacity 
+          style={[
+            styles.signOutButton, 
+            { backgroundColor: isDark ? '#450A0A' : '#FEF2F2', borderColor: isDark ? '#7F1D1D' : '#FECACA' }
+          ]} 
+          onPress={signOut}
+        >
+          <Ionicons name="log-out-outline" size={20} color={isDark ? '#FCA5A5' : '#991B1B'} />
+          <Text style={[styles.signOutText, { color: isDark ? '#FCA5A5' : '#991B1B' }]}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -62,66 +86,63 @@ export const MoreScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.light,
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: colors.text.light,
     marginTop: 10,
   },
   subtitle: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
+    fontSize: 13,
     marginTop: 4,
     marginBottom: 20,
   },
   grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
     marginBottom: 24,
   },
   gridItem: {
-    width: '30%',
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card.light,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: colors.border.light,
   },
   iconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#F8FAFC',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginRight: 12,
+  },
+  textContainer: {
+    flex: 1,
   },
   itemLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.text.light,
-    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  itemSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
   },
   signOutButton: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 14,
-    height: 52,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    height: 50,
     marginTop: 10,
   },
   signOutText: {
-    color: '#991B1B',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
   },
 });
+

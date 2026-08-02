@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: colors.background.light,
-    justify: 'center',
+    justifyContent: 'center',
     padding: 20,
   },
   card: {

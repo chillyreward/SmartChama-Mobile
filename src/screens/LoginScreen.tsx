@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 
@@ -29,6 +30,7 @@ export const LoginScreen: React.FC = () => {
   const [password, setPassword] = useState('');
   
   const [loading, setLoading] = useState(false);
+  const [showDemoDrawer, setShowDemoDrawer] = useState(false);
 
   // Format phone number to standard 254XXXXXXXXX
   const formatPhone = (raw: string) => {
@@ -162,7 +164,11 @@ export const LoginScreen: React.FC = () => {
         {/* Auth Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Welcome Back</Text>
-          <Text style={styles.cardSubtitle}>Sign in to access your Chama account</Text>
+          <Text style={styles.cardSubtitle}>
+            {loginMode === 'phone'
+              ? 'Members sign in with registered M-Pesa number'
+              : 'Chama Admins sign in with email credentials'}
+          </Text>
 
           {/* Mode Switcher */}
           <View style={styles.modeTabs}>
@@ -171,7 +177,7 @@ export const LoginScreen: React.FC = () => {
               onPress={() => setLoginMode('phone')}
             >
               <Text style={[styles.tabText, loginMode === 'phone' && styles.tabTextActive]}>
-                Phone OTP
+                📱 Phone OTP
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -179,7 +185,7 @@ export const LoginScreen: React.FC = () => {
               onPress={() => setLoginMode('email')}
             >
               <Text style={[styles.tabText, loginMode === 'email' && styles.tabTextActive]}>
-                Email Sign In
+                🔑 Admin Sign In
               </Text>
             </TouchableOpacity>
           </View>
@@ -277,23 +283,40 @@ export const LoginScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Demo Accounts Quick-Fill Section */}
-          <View style={styles.demoSection}>
-            <Text style={styles.demoTitle}>Try a Demo Account</Text>
-            <View style={styles.demoGrid}>
-              <TouchableOpacity
-                style={styles.demoButton}
-                onPress={() => handleDemoFill('demo.admin@smartchama.co.ke', 'DemoAdmin2024!')}
-              >
-                <Text style={styles.demoBtnText}>👑 Admin Demo</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.demoButton}
-                onPress={() => handleDemoFill('demo.member@smartchama.co.ke', 'DemoMember2024!')}
-              >
-                <Text style={styles.demoBtnText}>👤 Member Demo</Text>
-              </TouchableOpacity>
-            </View>
+          {/* Discreet Collapsible Demo Drawer */}
+          <View style={styles.demoDrawerContainer}>
+            <TouchableOpacity
+              style={styles.demoAccordionHeader}
+              onPress={() => setShowDemoDrawer(!showDemoDrawer)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.demoHeaderLeft}>
+                <Ionicons name="flash-outline" size={16} color="#16A34A" />
+                <Text style={styles.demoAccordionTitle}>Quick Demo Access (Testers)</Text>
+              </View>
+              <Ionicons
+                name={showDemoDrawer ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color="#6B7280"
+              />
+            </TouchableOpacity>
+
+            {showDemoDrawer && (
+              <View style={styles.demoGrid}>
+                <TouchableOpacity
+                  style={styles.demoButton}
+                  onPress={() => handleDemoFill('demo.admin@smartchama.co.ke', 'DemoAdmin2024!')}
+                >
+                  <Text style={styles.demoBtnText}>👑 Admin Demo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.demoButton}
+                  onPress={() => handleDemoFill('demo.member@smartchama.co.ke', 'DemoMember2024!')}
+                >
+                  <Text style={styles.demoBtnText}>👤 Member Demo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -345,7 +368,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cardSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary.light,
     textAlign: 'center',
     marginBottom: 20,
@@ -373,7 +396,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.textSecondary.light,
   },
@@ -456,36 +479,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  demoSection: {
-    marginTop: 24,
-    paddingTop: 20,
+  demoDrawerContainer: {
+    marginTop: 20,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: colors.border.light,
   },
-  demoTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    color: colors.textSecondary.light,
-    textAlign: 'center',
-    marginBottom: 12,
+  demoAccordionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  demoHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  demoAccordionTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#15803D',
   },
   demoGrid: {
     flexDirection: 'row',
     gap: 10,
+    marginTop: 12,
   },
   demoButton: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F0FDF4',
     borderWidth: 1,
-    borderColor: colors.border.light,
+    borderColor: '#BBF7D0',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   demoBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.text.light,
+    color: '#166534',
   },
 });

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import {
   View,
   Text,
@@ -11,16 +13,22 @@ import {
   Modal,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  TextInput,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 
 export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const { session, member, group, refreshAuth } = useAuth();
+  const { colors: themeColors, isDark } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [activeMembers, setActiveMembers] = useState<any[]>([]);
   const [pendingMembers, setPendingMembers] = useState<any[]>([]);
@@ -79,6 +87,79 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
       await Share.share({ message });
     } catch (error) {
       console.error('Share error:', error);
+    }
+  };
+
+  // Export Members Roster PDF to Downloads / Share Sheet (No printer modal)
+  const handleExportPDF = async () => {
+    try {
+      const today = new Date().toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+      const rowsHtml = activeMembers.map((m, idx) => {
+        const bg = idx % 2 === 0 ? '#FFFFFF' : '#F9FAFB';
+        const name = m.profiles?.full_name || 'Member';
+        const phone = m.profiles?.phone_number || 'N/A';
+        const role = m.role || 'Member';
+
+        return `<tr style="background-color: ${bg}; border-bottom: 1px solid #E5E7EB;">
+          <td style="padding: 10px 12px; font-size: 13px;">${idx + 1}</td>
+          <td style="padding: 10px 12px; font-size: 13px; font-weight: bold; color: #111827;">${name}</td>
+          <td style="padding: 10px 12px; font-size: 13px; color: #374151;">${phone}</td>
+          <td style="padding: 10px 12px; font-size: 13px; color: #16A34A; font-weight: bold; text-transform: uppercase;">${role}</td>
+        </tr>`;
+      }).join('');
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 24px; color: #1F2937; }
+            .header { background-color: #22C55E; color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 22px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th { background-color: #16A34A; color: white; text-align: left; padding: 10px 12px; font-size: 12px; text-transform: uppercase; }
+            .footer { margin-top: 30px; padding-top: 12px; border-top: 2px solid #22C55E; text-align: center; color: #6B7280; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${group?.name || 'SmartChama'} — Members Roster</h1>
+            <p style="margin:4px 0 0 0; font-size:13px; opacity:0.9;">Total Active Members: ${activeMembers.length} • Generated: ${today}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Full Name</th>
+                <th>Phone Number</th>
+                <th>Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml.length > 0 ? rowsHtml : '<tr><td colspan="4" style="padding:16px; text-align:center; color:#9CA3AF;">No members found.</td></tr>'}
+            </tbody>
+          </table>
+          <div class="footer">SmartChama Mobile Ledger • Verified Group Roster • www.smartchama.co.ke</div>
+        </body>
+        </html>
+      `;
+
+      // Creates PDF file silently without opening printer UI
+      const { uri } = await Print.printToFileAsync({ html: htmlContent });
+
+      // Opens native Share Sheet so user can Save to Files/Downloads/WhatsApp
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          UTI: '.pdf',
+          mimeType: 'application/pdf',
+          dialogTitle: `${group?.name || 'SmartChama'} Members Roster PDF`,
+        });
+      } else {
+        await Share.share({ title: 'Members Roster PDF', url: uri });
+      }
+    } catch (err: any) {
+      Alert.alert('Export Error', err.message || 'Could not generate PDF');
     }
   };
 
@@ -183,9 +264,15 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
             </Text>
           </View>
 
-          <TouchableOpacity style={styles.shareButton} onPress={handleShareInvite}>
-            <Text style={styles.shareButtonText}>📲 Share Invite Code</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity style={[styles.shareButton, { flex: 1 }]} onPress={handleShareInvite}>
+              <Text style={styles.shareButtonText}>📲 Share Invite Code</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.shareButton, { flex: 1, backgroundColor: '#16A34A' }]} onPress={handleExportPDF}>
+              <Text style={styles.shareButtonText}>📄 Export PDF</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Section 2: Admin Pending Approval Requests */}
@@ -378,7 +465,7 @@ const styles = StyleSheet.create({
     color: colors.primary,
     letterSpacing: 4,
     marginVertical: 6,
-    fontFamily: 'Platform.OS === "ios" ? "Courier" : "monospace"',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   cardInfoRow: {
     flexDirection: 'row',

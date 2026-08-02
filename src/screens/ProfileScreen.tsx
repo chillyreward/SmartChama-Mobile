@@ -12,14 +12,16 @@ import {
   Modal,
   ActivityIndicator,
   useColorScheme,
+  Linking,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 
 export const ProfileScreen: React.FC = () => {
   const { session, member, group, signOut, refreshAuth } = useAuth();
-  const systemColorScheme = useColorScheme();
+  const { mode: themeMode, setThemeMode, colors, isDark } = useTheme();
 
   // Edit Name State
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -30,7 +32,6 @@ export const ProfileScreen: React.FC = () => {
   const [smsNotifs, setSmsNotifs] = useState(true);
   const [pushNotifs, setPushNotifs] = useState(true);
   const [language, setLanguage] = useState<'en' | 'sw'>('en');
-  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>('system');
 
   const getInitials = (name?: string) => {
     if (!name) return 'M';
@@ -196,7 +197,7 @@ export const ProfileScreen: React.FC = () => {
             <View style={styles.settingTextGroup}>
               <Text style={styles.settingTitle}>App Theme</Text>
               <Text style={styles.settingSub}>
-                {themeMode === 'system' ? `System (${systemColorScheme})` : themeMode.toUpperCase()}
+                {themeMode === 'system' ? 'System Default' : themeMode.toUpperCase()}
               </Text>
             </View>
             <View style={styles.langSelector}>
@@ -224,12 +225,12 @@ export const ProfileScreen: React.FC = () => {
             <Text style={styles.linkVal}>v1.0.0 (Expo)</Text>
           </TouchableOpacity>
           <View style={styles.settingDivider} />
-          <TouchableOpacity style={styles.linkRow}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL('https://smart-chama10.vercel.app/privacy').catch(() => {})}>
             <Text style={styles.linkText}>Privacy Policy</Text>
             <Text style={styles.linkVal}>›</Text>
           </TouchableOpacity>
           <View style={styles.settingDivider} />
-          <TouchableOpacity style={styles.linkRow}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL('https://smart-chama10.vercel.app/terms').catch(() => {})}>
             <Text style={styles.linkText}>Terms of Service</Text>
             <Text style={styles.linkVal}>›</Text>
           </TouchableOpacity>
