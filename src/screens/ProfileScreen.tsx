@@ -15,6 +15,10 @@ import {
   Linking,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import * as Application from 'expo-application';
+import { env } from '../config/env';
+import { endpoints } from '../lib/api';
+import { allowSensitiveAction } from '../security/biometric';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
@@ -62,6 +66,45 @@ export const ProfileScreen: React.FC = () => {
     } finally {
       setUpdating(false);
     }
+  };
+
+  const [deleting, setDeleting] = useState(false);
+
+  // Google Play requires in-app account deletion. Personal details are erased;
+  // the group's financial records are kept (see /account/delete on the web).
+  const performDelete = async () => {
+    if (!(await allowSensitiveAction('Confirm account deletion'))) return;
+    setDeleting(true);
+    try {
+      await endpoints.deleteAccount();
+      Alert.alert('Account deleted', 'Your personal details have been erased and you have been signed out.');
+      await signOut();
+    } catch (err: any) {
+      Alert.alert('Could not delete account', err.message || 'Please try again.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete your account?',
+      'We will erase your name, phone number, email, ID number and photo, and you will not be able to sign in again. ' +
+        "Your group keeps the records of your contributions and loans for its accounts. You can't undo this.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Learn more', onPress: () => Linking.openURL(env.deleteAccountUrl).catch(() => {}) },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: () =>
+            Alert.alert('Are you sure?', 'This permanently deletes your SmartChama account.', [
+              { text: 'Keep my account', style: 'cancel' },
+              { text: 'Yes, delete', style: 'destructive', onPress: performDelete },
+            ]),
+        },
+      ]
+    );
   };
 
   const handleSignOutConfirm = () => {
@@ -222,15 +265,17 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.settingsCard}>
           <TouchableOpacity style={styles.linkRow}>
             <Text style={styles.linkText}>App Version</Text>
-            <Text style={styles.linkVal}>v1.0.0 (Expo)</Text>
+            <Text style={styles.linkVal}>
+              v{Application.nativeApplicationVersion ?? '-'} ({Application.nativeBuildVersion ?? '-'})
+            </Text>
           </TouchableOpacity>
           <View style={styles.settingDivider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL('https://smart-chama10.vercel.app/privacy').catch(() => {})}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL(env.privacyPolicyUrl).catch(() => {})}>
             <Text style={styles.linkText}>Privacy Policy</Text>
             <Text style={styles.linkVal}>›</Text>
           </TouchableOpacity>
           <View style={styles.settingDivider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL('https://smart-chama10.vercel.app/terms').catch(() => {})}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL(env.termsUrl).catch(() => {})}>
             <Text style={styles.linkText}>Terms of Service</Text>
             <Text style={styles.linkVal}>›</Text>
           </TouchableOpacity>
@@ -238,7 +283,17 @@ export const ProfileScreen: React.FC = () => {
 
         {/* Sign Out Button */}
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOutConfirm}>
-          <Text style={styles.signOutText}>🚪 Sign Out</Text>
+          <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={handleDeleteAccount}
+          disabled={deleting}
+          accessibilityRole="button"
+          accessibilityLabel="Delete my account"
+        >
+          <Text style={styles.deleteText}>{deleting ? 'Deleting…' : 'Delete my account'}</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -483,6 +538,18 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  deleteButton: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  deleteText: {
+    color: '#B91C1C',
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   modalOverlay: {
     flex: 1,

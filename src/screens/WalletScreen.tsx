@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import * as LocalAuthentication from 'expo-local-authentication';
+import React, { useEffect, useState } from 'react';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import {
@@ -23,6 +22,8 @@ import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 
 import { generateMemberStatementPDF } from '../utils/pdfExport';
+import { allowSensitiveAction } from '../security/biometric';
+import { useSecureScreen } from '../security/useSecureScreen';
 
 export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const { session, member, group } = useAuth();
@@ -37,9 +38,12 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
   const [outstandingLoansTotal, setOutstandingLoansTotal] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
 
-  // Send Money Modal State
+  useSecureScreen('wallet');
+
+  // Withdrawal request modal. Money leaves the group only after a majority of
+  // members vote yes and an official pays it out (server-side, locked).
   const [modalVisible, setModalVisible] = useState(false);
-  const [recipientPhone, setRecipientPhone] = useState('');
+  const [reason, setReason] = useState('');
   const [amount, setAmount] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -107,39 +111,6 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
     fetchWalletData();
   };
 
-  /**
-   * Biometric gate. Fail-open: if device has no hardware or no enrolled
-   * biometrics, returns true so the payment proceeds without blocking.
-   */
-  const requireBiometricAuth = useCallback(async (): Promise<boolean> => {
-    try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      if (!hasHardware) return true;
-
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!isEnrolled) return true;
-
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Confirm with fingerprint to send money',
-        fallbackLabel: 'Use PIN instead',
-        cancelLabel: 'Cancel',
-        disableDeviceFallback: false,
-      });
-
-      if (!result.success) {
-        Alert.alert(
-          'Authentication Failed',
-          'Fingerprint not recognised. Transfer cancelled.',
-          [{ text: 'OK' }]
-        );
-        return false;
-      }
-      return true;
-    } catch {
-      return true; // fail-open
-    }
-  }, []);
-
   const handleExportStatement = async () => {
     const memberName = (member as any)?.full_name || member?.profiles?.full_name || 'Member';
     await generateMemberStatementPDF({
@@ -150,26 +121,34 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
     });
   };
 
-  const handleSendMoney = async () => {
-    if (!recipientPhone || !amount || Number(amount) < 1) {
-      Alert.alert('Validation Error', 'Please enter a valid recipient phone number and amount');
+  const handleRequestWithdrawal = async () => {
+    const value = Number(amount);
+    if (!reason.trim() || !value || value < 1) {
+      Alert.alert('Missing details', 'Enter the amount and what the money is for.');
       return;
     }
-
-    // 🔐 Biometric gate — must pass before money moves
-    const authOk = await requireBiometricAuth();
-    if (!authOk) return;
+    if (value > walletBalance) {
+      Alert.alert('Not enough funds', `The group balance is KSh ${walletBalance.toLocaleString('en-KE')}.`);
+      return;
+    }
+    if (!(await allowSensitiveAction('Confirm withdrawal request'))) return;
 
     setSending(true);
     try {
-      // Simulate/trigger member transfer or STK push
-      Alert.alert('Success', `Initiated transfer of KSh ${amount} to ${recipientPhone}`);
+      const { error } = await supabase.from('withdrawal_consents').insert({
+        chama_id: group?.id,
+        requested_by: session?.user?.id,
+        amount: value,
+        reason: reason.trim().slice(0, 300),
+      });
+      if (error) throw error;
+      Alert.alert('Request sent', 'Members can now vote on your withdrawal request.');
       setModalVisible(false);
-      setRecipientPhone('');
+      setReason('');
       setAmount('');
       fetchWalletData();
     } catch (err: any) {
-      Alert.alert('Transfer Error', err.message || 'Could not complete transfer');
+      Alert.alert('Could not send request', err.message || 'Please try again.');
     } finally {
       setSending(false);
     }
@@ -203,8 +182,8 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
               style={[styles.actionBtn, { backgroundColor: colors.primary }]}
               onPress={() => setModalVisible(true)}
             >
-              <Ionicons name="send" size={16} color="#FFFFFF" />
-              <Text style={styles.actionBtnText}>Send Money</Text>
+              <Ionicons name="hand-left-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.actionBtnText}>Request withdrawal</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -285,20 +264,21 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
         )}
       </ScrollView>
 
-      {/* Send Money Modal */}
+      {/* Withdrawal request modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Send Money to Member</Text>
-            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>Direct M-Pesa STK transfer to member account</Text>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Request a withdrawal</Text>
+            <Text style={[styles.modalSub, { color: colors.textSecondary }]}>Members vote on it. If most agree, an official pays it out.</Text>
 
             <TextInput
               style={[styles.input, { backgroundColor: isDark ? '#1F2937' : '#F8FAFC', color: colors.text, borderColor: colors.border }]}
-              placeholder="Member Phone Number (07XXXXXXXX)"
+              placeholder="What is it for? (e.g. school fees)"
               placeholderTextColor={colors.textSecondary}
-              keyboardType="phone-pad"
-              value={recipientPhone}
-              onChangeText={setRecipientPhone}
+              value={reason}
+              onChangeText={setReason}
+              maxLength={300}
+              accessibilityLabel="Reason for withdrawal"
             />
 
             <TextInput
@@ -320,13 +300,13 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
 
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: colors.primary }]}
-                onPress={handleSendMoney}
+                onPress={handleRequestWithdrawal}
                 disabled={sending}
               >
                 {sending ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.submitBtnText}>Send Now</Text>
+                  <Text style={styles.submitBtnText}>Send request</Text>
                 )}
               </TouchableOpacity>
             </View>

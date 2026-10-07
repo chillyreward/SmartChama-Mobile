@@ -15,6 +15,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { Alert } from 'react-native';
+import { logger } from '../lib/logger';
 
 interface Message {
   id: string;
@@ -23,7 +25,7 @@ interface Message {
   content: string;
   created_at: string;
   chama_memberships?: {
-    full_name?: string;
+    profiles?: { full_name?: string };
   };
   sender_name?: string;
 }
@@ -44,7 +46,7 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
     try {
       const { data, error } = await supabase
         .from('chama_messages')
-        .select('*, chama_memberships(full_name)')
+        .select('*, chama_memberships(profiles(full_name))')
         .eq('chama_id', group.id)
         .order('created_at', { ascending: false })
         .limit(50);
@@ -65,7 +67,7 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
         ]);
       }
     } catch (err) {
-      console.log('Error fetching chat messages:', err);
+      logger.error('Error fetching chat messages', err);
     } finally {
       setLoading(false);
     }
@@ -89,7 +91,10 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
         },
         (payload) => {
           const newMsg = payload.new as Message;
-          setMessages((prev) => [newMsg, ...prev]);
+          // Own messages are already shown optimistically; others are
+          // refetched so the sender's name comes with them.
+          if (newMsg.member_id === member?.id) return;
+          fetchMessages();
         }
       )
       .subscribe();
@@ -122,12 +127,15 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
       const { error } = await supabase.from('chama_messages').insert({
         chama_id: group.id,
         member_id: member?.id,
-        content: trimmed,
+        content: trimmed.slice(0, 2000),
       });
-
-      if (error) console.log('Message insert error:', error.message);
+      if (error) throw error;
     } catch (err) {
-      console.log('Message insert exception:', err);
+      logger.error('Message send failed', err);
+      // Take back the optimistic message and give the text back to the user
+      setMessages((prev) => prev.filter((m) => m.id !== newMsgObj.id));
+      setText(trimmed);
+      Alert.alert('Message not sent', 'Check your connection and try again.');
     } finally {
       setSending(false);
     }
@@ -177,7 +185,7 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
             renderItem={({ item }) => {
               const isMe = item.member_id === member?.id;
               const nameToShow =
-                item.sender_name || item.chama_memberships?.full_name || 'Member';
+                item.sender_name || item.chama_memberships?.profiles?.full_name || 'Member';
               const formattedTime = new Date(item.created_at).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',

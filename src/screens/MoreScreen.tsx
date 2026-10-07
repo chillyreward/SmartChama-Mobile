@@ -10,27 +10,31 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import { features } from '../config/features';
 
 interface FeatureItem {
   iconName: keyof typeof Ionicons.glyphMap;
   label: string;
   subtitle: string;
   route: string;
+  /** Hidden unless this feature flag is on */
+  flag?: boolean;
 }
 
-const extraFeatures: FeatureItem[] = [
-  { iconName: 'chatbubbles', label: 'Group Chat', subtitle: 'Discussions & notices', route: 'Chat' },
-  { iconName: 'refresh-circle', label: 'Merry-Go-Round', subtitle: 'Rotating payout pot', route: 'MerryGoRound' },
+const allFeatures: FeatureItem[] = [
+  { iconName: 'chatbubbles', label: 'Group Chat', subtitle: 'Discussions & notices', route: 'Chat', flag: features.groupChat },
+  { iconName: 'refresh-circle', label: 'Merry-Go-Round', subtitle: 'Rotating payout pot', route: 'MerryGoRound', flag: features.merryGoRound },
   { iconName: 'people', label: 'Members', subtitle: 'Group member roster', route: 'Members' },
   { iconName: 'receipt', label: 'History', subtitle: 'All transaction logs', route: 'History' },
-  { iconName: 'trending-up', label: 'SmartGrow', subtitle: 'Investment proposals', route: 'SmartGrow' },
+  { iconName: 'trending-up', label: 'SmartGrow', subtitle: 'Investment proposals', route: 'SmartGrow', flag: features.smartGrow },
   { iconName: 'bar-chart', label: 'Analytics', subtitle: 'Savings & loan charts', route: 'Analytics' },
   { iconName: 'shield-checkmark', label: 'Trust Score', subtitle: 'Member credibility', route: 'TrustScore' },
   { iconName: 'notifications', label: 'Alerts', subtitle: 'Group notifications', route: 'Alerts' },
-  { iconName: 'heart', label: 'Welfare Fund', subtitle: 'Emergency support claims', route: 'Welfare' },
-  { iconName: 'settings', label: 'Settings', subtitle: 'App preferences', route: 'Profile' },
-  { iconName: 'person-circle', label: 'Profile', subtitle: 'Personal profile & KYC', route: 'Profile' },
+  { iconName: 'heart', label: 'Welfare Fund', subtitle: 'Emergency support claims', route: 'Welfare', flag: features.welfare },
+  { iconName: 'person-circle', label: 'Profile & settings', subtitle: 'Personal details, security, delete account', route: 'Profile' },
 ];
+
+const extraFeatures = allFeatures.filter((f) => f.flag !== false);
 
 export const MoreScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const { signOut } = useAuth();

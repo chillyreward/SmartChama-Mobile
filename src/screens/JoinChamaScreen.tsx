@@ -10,9 +10,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { endpoints } from '../lib/api';
 import { colors } from '../theme/colors';
 
-const API_BASE_URL = 'https://smart-chama10.vercel.app';
 
 export const JoinChamaScreen: React.FC = () => {
   const { session, member, group, signOut, refreshAuth } = useAuth();
@@ -32,21 +32,12 @@ export const JoinChamaScreen: React.FC = () => {
     setLoading(true);
     setErrorMsg('');
     try {
-      const res = await fetch(`${API_BASE_URL}/api/chamas/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({ group_code: groupCode.trim().toUpperCase() }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to join group.');
+      // Group code -> request awaiting an official's approval;
+      // personal invite token -> joins straight away.
+      const data = await endpoints.joinChama(groupCode.trim().toUpperCase());
+      if (data.pending) {
+        setPendingMessage(`Your request to join ${data.chamaName || 'the group'} has been sent. You'll get access once an official approves it.`);
       }
-
-      setPendingMessage(data.message || 'Your request to join has been sent to the admin for approval.');
       await refreshAuth();
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to join group. Check group code and try again.');

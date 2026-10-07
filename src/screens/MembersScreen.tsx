@@ -17,6 +17,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { env } from '../config/env';
 import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
@@ -83,7 +84,7 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   // Share Group Invite Code
   const handleShareInvite = async () => {
     try {
-      const message = `Join ${group?.name || 'our Chama'} on SmartChama! Use group invite code: ${group?.group_code}. Download app at https://smart-chama10.vercel.app`;
+      const message = `Join ${group?.name || 'our Chama'} on SmartChama! Use group invite code: ${group?.group_code}. Join at ${env.apiBaseUrl}/signup?code=${group?.group_code}`;
       await Share.share({ message });
     } catch (error) {
       console.error('Share error:', error);

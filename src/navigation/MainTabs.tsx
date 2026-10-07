@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { features } from '../config/features';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { ContributionsScreen } from '../screens/ContributionsScreen';
 import { LoansScreen } from '../screens/LoansScreen';
@@ -54,7 +55,7 @@ export const MainTabs: React.FC = () => {
       <Tab.Screen name="Contribute" component={ContributionsScreen} />
       <Tab.Screen name="Loans" component={LoansScreen} />
       <Tab.Screen name="Wallet" component={WalletScreen} />
-      <Tab.Screen name="Chat" component={ChatScreen} />
+      {features.groupChat && <Tab.Screen name="Chat" component={ChatScreen} />}
       <Tab.Screen name="More" component={MoreScreen} />
     </Tab.Navigator>
   );

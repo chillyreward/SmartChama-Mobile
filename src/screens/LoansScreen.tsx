@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,13 +18,24 @@ import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { EmptyState } from '../components/EmptyState';
+import { integrations } from '../integrations';
+import { allowSensitiveAction } from '../security/biometric';
+import { useSecureScreen } from '../security/useSecureScreen';
+import { watchPayment } from '../lib/paymentStatus';
+import { logger } from '../lib/logger';
 
-const API_BASE_URL = 'https://smart-chama10.vercel.app';
+// What the member still owes: principal + flat interest - repaid so far
+const amountOwed = (loan: any) =>
+  Math.max(0, Math.ceil(Number(loan.amount || 0) * (1 + Number(loan.interest_rate || 0) / 100) - Number(loan.total_repaid || 0)));
+
 
 export const LoansScreen: React.FC = () => {
   const { session, member, group, refreshAuth } = useAuth();
   const { isDark } = useTheme();
 
+  useSecureScreen('loans');
+  const cancelWatch = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelWatch.current?.(), []);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -83,7 +94,7 @@ export const LoansScreen: React.FC = () => {
       // Calculate total active balance
       const activeSum = active
         .filter((l) => l.status === 'active' || l.status === 'overdue')
-        .reduce((sum, l) => sum + Number(l.amount || 0), 0);
+        .reduce((sum, l) => sum + amountOwed(l), 0);
 
       setTotalOutstanding(activeSum);
       setAvailableCredit(Math.max(0, creditLimit - activeSum));
@@ -92,7 +103,7 @@ export const LoansScreen: React.FC = () => {
         setRepayPhone(member.profiles.phone_number);
       }
     } catch (err) {
-      console.error('Error fetching loans:', err);
+      logger.error('Error fetching loans', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -109,9 +120,10 @@ export const LoansScreen: React.FC = () => {
     await fetchLoansData();
   };
 
-  // Calculated Interest (5% flat rate)
+  // Flat interest set by the chama (Loans settings on the web admin)
   const parsedAmount = Number(loanAmount) || 0;
-  const interestRate = 0.05;
+  const interestPercent = Number((group as any)?.loan_interest_rate ?? 10);
+  const interestRate = interestPercent / 100;
   const calculatedInterest = parsedAmount * interestRate;
   const totalRepayable = parsedAmount + calculatedInterest;
   const monthlyInstallment = durationMonths > 0 ? totalRepayable / durationMonths : 0;
@@ -129,42 +141,19 @@ export const LoansScreen: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const dueDate = new Date();
-      dueDate.setMonth(dueDate.getMonth() + durationMonths);
-
-      const { data: newLoan, error } = await supabase
-        .from('loans_v2')
-        .insert({
-          membership_id: member?.id,
-          chama_id: group?.id,
-          amount: parsedAmount,
-          interest_rate: 5,
-          status: 'pending',
-          due_date: dueDate.toISOString(),
-        })
-        .select()
-        .single();
+      // Due date is set when an official approves; officials are notified by a
+      // database trigger (members can't write other people's notifications).
+      const { error } = await supabase.from('loans_v2').insert({
+        membership_id: member?.id,
+        chama_id: group?.id,
+        amount: parsedAmount,
+        interest_rate: interestPercent,
+        repayment_months: durationMonths,
+        purpose,
+        status: 'pending',
+      });
 
       if (error) throw error;
-
-      // Notify Chama Admins
-      const { data: admins } = await supabase
-        .from('chama_memberships')
-        .select('profile_id')
-        .eq('chama_id', group?.id)
-        .in('role', ['admin', 'chairlady', 'treasurer'])
-        .eq('status', 'active');
-
-      if (admins && admins.length > 0) {
-        const notifs = admins.map((a) => ({
-          chama_id: group?.id,
-          profile_id: a.profile_id,
-          type: 'loan_request',
-          title: 'New Loan Request',
-          message: `${member?.profiles?.full_name || 'A member'} requested a loan of KSh ${formatCurrency(parsedAmount)} for ${purpose}.`,
-        }));
-        await supabase.from('notifications').insert(notifs);
-      }
 
       Alert.alert('Success', 'Loan request submitted successfully! Pending admin approval.');
       setModalVisible(false);
@@ -185,62 +174,43 @@ export const LoansScreen: React.FC = () => {
       return;
     }
 
+    if (selectedLoan && numRepay > amountOwed(selectedLoan)) {
+      Alert.alert('Too much', `You only owe KSh ${formatCurrency(amountOwed(selectedLoan))} on this loan.`);
+      return;
+    }
+    if (!(await allowSensitiveAction('Confirm to repay with M-Pesa'))) return;
+
     setStkStatus('sending');
     try {
       let formattedPhone = repayPhone.replace(/\s/g, '');
+      if (formattedPhone.startsWith('+')) formattedPhone = formattedPhone.slice(1);
       if (formattedPhone.startsWith('0')) formattedPhone = '254' + formattedPhone.slice(1);
       if (!formattedPhone.startsWith('254')) formattedPhone = '254' + formattedPhone;
 
-      const res = await fetch(`${API_BASE_URL}/api/mpesa/stk-push`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          phone: formattedPhone,
-          amount: numRepay,
-          chama_id: group?.id,
-          membership_id: member?.id,
-          account_ref: `LoanRepay-${selectedLoan?.id?.slice(0, 6)}`,
-        }),
+      // loan_id makes the server apply this payment to the loan, not to savings
+      const { contributionId } = await integrations.mobileMoney.mpesa.requestPayment({
+        phone: formattedPhone,
+        amount: numRepay,
+        chamaId: group!.id,
+        membershipId: member!.id,
+        reference: 'LoanRepay',
+        loanId: selectedLoan?.id,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'M-Pesa push failed');
-
       setStkStatus('waiting');
-      const targetLoanId = selectedLoan?.id;
-      let attempts = 0;
-      const maxAttempts = 20; // 20 * 3s = 60s total
-
-      const pollInterval = setInterval(async () => {
-        attempts++;
-        try {
-          if (targetLoanId) {
-            const { data: updatedLoan } = await supabase
-              .from('loans_v2')
-              .select('status, balance')
-              .eq('id', targetLoanId)
-              .maybeSingle();
-
-            if (updatedLoan && (updatedLoan.status === 'repaid' || Number(updatedLoan.balance) < Number(selectedLoan.balance))) {
-              clearInterval(pollInterval);
-              setStkStatus('success');
-              fetchLoansData();
-              return;
-            }
-          }
-        } catch (pollErr) {
-          console.error('Loan polling error:', pollErr);
-        }
-
-        if (attempts >= maxAttempts) {
-          clearInterval(pollInterval);
+      cancelWatch.current?.();
+      cancelWatch.current = watchPayment(contributionId, (outcome) => {
+        if (outcome.status === 'confirmed') {
           setStkStatus('success');
-          fetchLoansData();
+        } else if (outcome.status === 'failed') {
+          setStkStatus('idle');
+          Alert.alert('Repayment not completed', outcome.reason || 'The M-Pesa payment was cancelled or failed.');
+        } else {
+          setStkStatus('idle');
+          Alert.alert('Still waiting', "We haven't received confirmation yet. If you paid, it will show here shortly.");
         }
-      }, 3000);
+        fetchLoansData();
+      });
     } catch (err: any) {
       setStkStatus('idle');
       Alert.alert('Repayment Error', err.message || 'Failed to initiate M-Pesa repayment.');
@@ -356,7 +326,7 @@ export const LoansScreen: React.FC = () => {
                 <View style={styles.loanDetailsGrid}>
                   <View>
                     <Text style={styles.detailLabel}>Interest Rate</Text>
-                    <Text style={styles.detailValue}>{item.interest_rate || 5}%</Text>
+                    <Text style={styles.detailValue}>{item.interest_rate ?? interestPercent}%</Text>
                   </View>
                   <View>
                     <Text style={styles.detailLabel}>Due Date</Text>
@@ -376,7 +346,7 @@ export const LoansScreen: React.FC = () => {
                     style={styles.repayBtn}
                     onPress={() => {
                       setSelectedLoan(item);
-                      setRepayAmount(String(item.amount));
+                      setRepayAmount(String(amountOwed(item)));
                       setStkStatus('idle');
                       setRepayModalVisible(true);
                     }}

@@ -1,21 +1,28 @@
 import { createClient } from '@supabase/supabase-js';
-import * as SecureStore from 'expo-secure-store';
+import { AppState } from 'react-native';
+import { env } from '../config/env';
+import { secureSessionStorage } from './secureStorage';
 
-const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
-};
+// Talks to Supabase as the signed-in user, so row-level security decides what
+// they can read and write. Privileged actions go through the web API instead
+// (src/lib/api.ts).
+export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey, {
+  auth: {
+    storage: secureSessionStorage,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: false,
+    // PKCE: OAuth returns a one-time code (not tokens) in the redirect URL,
+    // so an intercepted deep link can't be replayed.
+    flowType: 'pkce',
+  },
+});
 
-export const supabase = createClient(
-  'https://stfjghudefipojpcdxtn.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0ZmpnaHVkZWZpcG9qcGNkeHRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTIzOTYsImV4cCI6MjA4NTg4ODM5Nn0.7lWo_gUi3zA5GF7wsGPdlStWwGLWI66QI4nRf0WjG_A',
-  {
-    auth: {
-      storage: ExpoSecureStoreAdapter,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
+// Only refresh tokens while the app is in the foreground.
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') {
+    supabase.auth.startAutoRefresh();
+  } else {
+    supabase.auth.stopAutoRefresh();
   }
-);
+});

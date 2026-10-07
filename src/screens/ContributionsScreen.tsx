@@ -1,5 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import * as LocalAuthentication from 'expo-local-authentication';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,12 +18,18 @@ import { useTheme } from '../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
-
-const API_BASE_URL = 'https://smart-chama10.vercel.app';
+import { integrations } from '../integrations';
+import { allowSensitiveAction } from '../security/biometric';
+import { useSecureScreen } from '../security/useSecureScreen';
+import { watchPayment } from '../lib/paymentStatus';
 
 export const ContributionsScreen: React.FC = () => {
   const { session, member, group, refreshAuth } = useAuth();
   const { colors: themeColors, isDark } = useTheme();
+  useSecureScreen('contributions');
+  // Stops polling if the user leaves the screen mid-payment
+  const cancelWatch = useRef<(() => void) | null>(null);
+  useEffect(() => () => cancelWatch.current?.(), []);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,40 +103,6 @@ export const ContributionsScreen: React.FC = () => {
     await fetchContributionsData();
   };
 
-  /**
-   * Checks biometric hardware & enrollment, then prompts the user.
-   * Returns true if auth passed (or device has no biometrics — fail-open).
-   */
-  const requireBiometricAuth = useCallback(async (): Promise<boolean> => {
-    try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      if (!hasHardware) return true; // No sensor — skip silently
-
-      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!isEnrolled) return true; // No fingerprints set up — skip silently
-
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Confirm with fingerprint to pay',
-        fallbackLabel: 'Use PIN instead',
-        cancelLabel: 'Cancel',
-        disableDeviceFallback: false,
-      });
-
-      if (!result.success) {
-        Alert.alert(
-          'Authentication Failed',
-          'Fingerprint not recognised. Payment cancelled.',
-          [{ text: 'OK' }]
-        );
-        return false;
-      }
-      return true;
-    } catch {
-      // If biometric check itself throws, fail-open so payments still work
-      return true;
-    }
-  }, []);
-
   // Trigger M-Pesa STK Push
   const handlePayViaMpesa = async () => {
     const numAmount = Number(amount);
@@ -150,67 +121,43 @@ export const ContributionsScreen: React.FC = () => {
     }
 
     // 🔐 Biometric gate — must pass before STK push is sent
-    const authOk = await requireBiometricAuth();
+    const authOk = await allowSensitiveAction('Confirm to pay with M-Pesa');
     if (!authOk) return;
 
     setStkStatus('sending');
     setStatusMessage('Initiating M-Pesa STK Push...');
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/mpesa/stk-push`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          phone: formattedPhone,
-          amount: numAmount,
-          chama_id: group?.id,
-          membership_id: member?.id,
-          account_ref: group?.name || 'SmartChama',
-        }),
+      const { contributionId } = await integrations.mobileMoney.mpesa.requestPayment({
+        phone: formattedPhone,
+        amount: numAmount,
+        chamaId: group!.id,
+        membershipId: member!.id,
+        reference: group?.name?.slice(0, 12) || 'SmartChama',
       });
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to trigger M-Pesa payment.');
-      }
-
-      const checkoutId = data.CheckoutRequestID || data.checkout_request_id;
       setStkStatus('waiting');
-      setStatusMessage('Check your phone for the M-Pesa STK prompt and enter your PIN.');
+      setStatusMessage('Check your phone for the M-Pesa prompt and enter your PIN.');
 
-      // Poll for payment confirmation for up to 60 seconds (12 iterations x 5s)
-      let attempts = 0;
-      const interval = setInterval(async () => {
-        attempts += 1;
-
-        const { data: latestContrib } = await supabase
-          .from('contributions_v2')
-          .select('status, mpesa_receipt')
-          .eq('membership_id', member?.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-
-        if (latestContrib && latestContrib.status === 'confirmed') {
-          clearInterval(interval);
+      // Follow this exact payment until the server confirms it with Safaricom
+      cancelWatch.current?.();
+      cancelWatch.current = watchPayment(contributionId, (outcome) => {
+        if (outcome.status === 'confirmed') {
           setStkStatus('success');
-          const receiptNo = latestContrib.mpesa_receipt || 'Confirmed';
-          setStatusMessage(`Payment Received! Receipt: ${receiptNo}`);
+          const receiptNo = outcome.receipt || 'Confirmed';
+          setStatusMessage(`Payment received! Receipt: ${receiptNo}`);
           fetchContributionsData();
           sendWhatsAppConfirmation(receiptNo, numAmount);
-          return;
-        }
-
-        if (attempts >= 12) {
-          clearInterval(interval);
+        } else if (outcome.status === 'failed') {
+          setStkStatus('idle');
+          setStatusMessage('');
+          Alert.alert('Payment not completed', outcome.reason || 'The M-Pesa payment was cancelled or failed.');
+        } else {
           setStkStatus('timeout');
-          setStatusMessage('Payment verification timed out. If completed, it will reflect shortly.');
+          setStatusMessage("We haven't received confirmation yet. If you paid, it will show here shortly.");
           fetchContributionsData();
         }
-      }, 5000);
+      });
     } catch (err: any) {
       setStkStatus('idle');
       Alert.alert('Payment Error', err.message || 'M-Pesa STK push failed.');

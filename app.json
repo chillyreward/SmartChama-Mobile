@@ -3,9 +3,8 @@
     "name": "SmartChama",
     "slug": "smartchama",
     "owner": "chilly_reward1",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scheme": "smartchama",
-    "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,16 +13,45 @@
       "bundleIdentifier": "co.ke.smartchama.app"
     },
     "android": {
+      "package": "co.ke.smartchama.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
         "backgroundColor": "#22C55E"
       },
-      "package": "co.ke.smartchama.app",
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
       "permissions": [
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE"
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS",
+        "android.permission.GET_ACCOUNTS",
+        "android.permission.READ_CALL_LOG",
+        "android.permission.READ_PHONE_STATE",
+        "android.permission.READ_PHONE_NUMBERS",
+        "android.permission.CALL_PHONE",
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS",
+        "android.permission.SEND_SMS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.QUERY_ALL_PACKAGES",
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ]
     },
     "plugins": [
@@ -37,7 +65,33 @@
           "backgroundColor": "#22C55E"
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-font",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "SmartChama uses Face ID to confirm payments and unlock the app."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#22C55E"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 24,
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "usesCleartextTraffic": false
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

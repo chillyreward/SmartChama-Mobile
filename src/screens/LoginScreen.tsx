@@ -14,13 +14,15 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
+import * as Linking from 'expo-linking';
 import { supabase } from '../lib/supabase';
+import { endpoints } from '../lib/api';
+import { env } from '../config/env';
+import { features } from '../config/features';
 import { colors } from '../theme/colors';
 
 // Required: warm up the browser on Android for a faster OAuth open
 WebBrowser.maybeCompleteAuthSession();
-
-const API_BASE_URL = 'https://smart-chama10.vercel.app';
 
 export const LoginScreen: React.FC = () => {
   const [loginMode, setLoginMode] = useState<'phone' | 'email'>('phone');
@@ -49,67 +51,47 @@ export const LoginScreen: React.FC = () => {
   };
 
   const handleSendOTP = async () => {
-    if (!phoneNumber || phoneNumber.length < 9) {
+    if (!phoneNumber || phoneNumber.replace(/\D/g, '').length < 9) {
       Alert.alert('Invalid Phone', 'Please enter a valid Kenyan phone number.');
       return;
     }
 
     setLoading(true);
     try {
-      const formatted = formatPhone(phoneNumber);
-      const res = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: formatted }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to send OTP code.');
-      }
-
+      await endpoints.sendOtp(formatPhone(phoneNumber));
       setStep('otp');
-      Alert.alert('OTP Sent', 'Check your phone for the 6-digit verification code.');
+      Alert.alert('Code sent', 'Check your SMS for the 6-digit verification code.');
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not send OTP.');
+      Alert.alert('Error', err.message || 'Could not send the code.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyOTP = async () => {
-    if (!otpCode || otpCode.length < 6) {
-      Alert.alert('Invalid Code', 'Please enter the 6-digit OTP code.');
+    if (!/^\d{6}$/.test(otpCode)) {
+      Alert.alert('Invalid Code', 'Please enter the 6-digit code.');
       return;
     }
 
     setLoading(true);
     try {
-      const formatted = formatPhone(phoneNumber);
-      const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: formatted, code: otpCode }),
+      const data = await endpoints.verifyOtp(formatPhone(phoneNumber), otpCode);
+      if (data.isNewUser || !data.token_hash) {
+        Alert.alert(
+          'No account for this number',
+          'This phone number is not linked to a SmartChama account yet. Sign up with email or Google first, then add your phone number.'
+        );
+        return;
+      }
+      // Exchange the one-time hash for a session (triggers onAuthStateChange)
+      const { error: otpError } = await supabase.auth.verifyOtp({
+        token_hash: data.token_hash,
+        type: 'magiclink',
       });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'OTP verification failed.');
-      }
-
-      // If magic link token returned, verify OTP with Supabase
-      if (data.token_hash) {
-        const { error: otpError } = await supabase.auth.verifyOtp({
-          token_hash: data.token_hash,
-          type: 'magiclink',
-        });
-        if (otpError) throw otpError;
-      } else if (data.email) {
-        // Fallback for phone-based email mapping
-        Alert.alert('Success', 'Verification complete. Logging in...');
-      }
+      if (otpError) throw otpError;
     } catch (err: any) {
-      Alert.alert('Verification Error', err.message || 'Invalid or expired OTP.');
+      Alert.alert('Verification Error', err.message || 'Invalid or expired code.');
     } finally {
       setLoading(false);
     }
@@ -136,6 +118,13 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
+  // Development builds only (features.demoLogin is always false in production).
+  // Credentials come from the developer's .env, never from source code.
+  const demoAccounts = [
+    { label: 'Admin Demo', email: process.env.EXPO_PUBLIC_DEMO_ADMIN_EMAIL, password: process.env.EXPO_PUBLIC_DEMO_ADMIN_PASSWORD },
+    { label: 'Member Demo', email: process.env.EXPO_PUBLIC_DEMO_MEMBER_EMAIL, password: process.env.EXPO_PUBLIC_DEMO_MEMBER_PASSWORD },
+  ].filter((a) => a.email && a.password) as Array<{ label: string; email: string; password: string }>;
+
   const handleDemoFill = async (demoEmail: string, demoPass: string) => {
     setEmail(demoEmail);
     setPassword(demoPass);
@@ -157,56 +146,29 @@ export const LoginScreen: React.FC = () => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // Build the redirect URI — uses auth.expo.io proxy in Expo Go,
-      // and smartchama:// in dev/production builds
-      const redirectUri = makeRedirectUri({
-        scheme: 'smartchama',
-        path: 'auth/callback',
-      });
+      // smartchama://auth/callback (must be in Supabase Auth -> Redirect URLs)
+      const redirectUri = makeRedirectUri({ scheme: env.scheme, path: 'auth/callback' });
 
-      // Ask Supabase for the Google OAuth URL
+      // PKCE: Supabase keeps a code verifier on the device and the redirect
+      // carries a one-time code instead of tokens.
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: redirectUri,
-          skipBrowserRedirect: true, // we open the browser ourselves below
-        },
+        options: { redirectTo: redirectUri, skipBrowserRedirect: true },
       });
-
       if (error) throw error;
-      if (!data?.url) throw new Error('No OAuth URL returned from Supabase.');
+      if (!data?.url) throw new Error('No sign-in URL returned.');
 
-      // Open the Google sign-in page in an in-app browser
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+      if (result.type !== 'success' || !result.url) return; // cancelled or dismissed
 
-      if (result.type === 'success' && result.url) {
-        // Extract the tokens from the redirect URL fragment
-        const url = result.url;
+      const { queryParams } = Linking.parse(result.url);
+      const oauthError = typeof queryParams?.error_description === 'string' ? queryParams.error_description : null;
+      if (oauthError) throw new Error(oauthError);
+      const code = typeof queryParams?.code === 'string' ? queryParams.code : null;
+      if (!code) throw new Error('Sign-in was not completed. Please try again.');
 
-        // Supabase returns tokens in the URL fragment (#access_token=...&refresh_token=...)
-        const hashPart = url.split('#')[1] ?? '';
-        const params = Object.fromEntries(
-          hashPart.split('&').map((pair) => pair.split('=').map(decodeURIComponent))
-        );
-
-        const accessToken = params['access_token'];
-        const refreshToken = params['refresh_token'];
-
-        if (accessToken && refreshToken) {
-          // Set the Supabase session manually — triggers onAuthStateChange in AuthContext
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (sessionError) throw sessionError;
-        } else {
-          // Fallback: re-fetch the session (works if Supabase already stored it)
-          const { error: refreshError } = await supabase.auth.refreshSession();
-          if (refreshError) throw refreshError;
-        }
-      } else if (result.type === 'cancel' || result.type === 'dismiss') {
-        // User closed the browser — not an error, just do nothing
-      }
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) throw exchangeError;
     } catch (err: any) {
       Alert.alert('Google Sign-In Failed', err.message || 'Something went wrong. Please try again.');
     } finally {
@@ -349,6 +311,7 @@ export const LoginScreen: React.FC = () => {
           )}
 
           {/* Google Sign-In Divider + Button */}
+          {features.googleSignIn && (<>
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or</Text>
@@ -371,8 +334,10 @@ export const LoginScreen: React.FC = () => {
               </>
             )}
           </TouchableOpacity>
+          </>)}
 
-          {/* Discreet Collapsible Demo Drawer */}
+          {/* Demo accounts: development builds only */}
+          {features.demoLogin && demoAccounts.length > 0 && (
           <View style={styles.demoDrawerContainer}>
             <TouchableOpacity
               style={styles.demoAccordionHeader}
@@ -392,21 +357,19 @@ export const LoginScreen: React.FC = () => {
 
             {showDemoDrawer && (
               <View style={styles.demoGrid}>
-                <TouchableOpacity
-                  style={styles.demoButton}
-                  onPress={() => handleDemoFill('demo.admin@smartchama.co.ke', 'DemoAdmin2024!')}
-                >
-                  <Text style={styles.demoBtnText}>👑 Admin Demo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.demoButton}
-                  onPress={() => handleDemoFill('demo.member@smartchama.co.ke', 'DemoMember2024!')}
-                >
-                  <Text style={styles.demoBtnText}>👤 Member Demo</Text>
-                </TouchableOpacity>
+                {demoAccounts.map((a) => (
+                  <TouchableOpacity
+                    key={a.label}
+                    style={styles.demoButton}
+                    onPress={() => handleDemoFill(a.email, a.password)}
+                  >
+                    <Text style={styles.demoBtnText}>{a.label}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
           </View>
+          )}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

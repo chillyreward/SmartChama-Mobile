@@ -63,7 +63,8 @@ export const CompleteProfileScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      const formatted = formatPhone(phoneNumber);
+      // Stored as +2547XXXXXXXX: the format SMS sign-in, USSD and the web use
+      const formatted = '+' + formatPhone(phoneNumber);
 
       const { error } = await supabase
         .from('profiles')
@@ -73,7 +74,10 @@ export const CompleteProfileScreen: React.FC = () => {
         })
         .eq('id', session.user.id);
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') throw new Error('That phone number is already linked to another SmartChama account.');
+        throw error;
+      }
 
       // refreshAuth re-runs fetchUserData — needsPhoneNumber becomes false
       // and AppNavigator automatically advances to the next screen
