@@ -12,8 +12,13 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import { makeRedirectUri } from 'expo-auth-session';
 import { supabase } from '../lib/supabase';
 import { colors } from '../theme/colors';
+
+// Required: warm up the browser on Android for a faster OAuth open
+WebBrowser.maybeCompleteAuthSession();
 
 const API_BASE_URL = 'https://smart-chama10.vercel.app';
 
@@ -144,6 +149,66 @@ export const LoginScreen: React.FC = () => {
       if (error) throw error;
     } catch (err: any) {
       Alert.alert('Demo Error', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    try {
+      // Build the redirect URI — uses auth.expo.io proxy in Expo Go,
+      // and smartchama:// in dev/production builds
+      const redirectUri = makeRedirectUri({
+        scheme: 'smartchama',
+        path: 'auth/callback',
+      });
+
+      // Ask Supabase for the Google OAuth URL
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUri,
+          skipBrowserRedirect: true, // we open the browser ourselves below
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.url) throw new Error('No OAuth URL returned from Supabase.');
+
+      // Open the Google sign-in page in an in-app browser
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+
+      if (result.type === 'success' && result.url) {
+        // Extract the tokens from the redirect URL fragment
+        const url = result.url;
+
+        // Supabase returns tokens in the URL fragment (#access_token=...&refresh_token=...)
+        const hashPart = url.split('#')[1] ?? '';
+        const params = Object.fromEntries(
+          hashPart.split('&').map((pair) => pair.split('=').map(decodeURIComponent))
+        );
+
+        const accessToken = params['access_token'];
+        const refreshToken = params['refresh_token'];
+
+        if (accessToken && refreshToken) {
+          // Set the Supabase session manually — triggers onAuthStateChange in AuthContext
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (sessionError) throw sessionError;
+        } else {
+          // Fallback: re-fetch the session (works if Supabase already stored it)
+          const { error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) throw refreshError;
+        }
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        // User closed the browser — not an error, just do nothing
+      }
+    } catch (err: any) {
+      Alert.alert('Google Sign-In Failed', err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -282,6 +347,30 @@ export const LoginScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Google Sign-In Divider + Button */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            {loading ? (
+              <ActivityIndicator color="#374151" />
+            ) : (
+              <>
+                {/* Google 'G' icon using Ionicons logo-google */}
+                <Ionicons name="logo-google" size={20} color="#EA4335" style={styles.googleIcon} />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
           {/* Discreet Collapsible Demo Drawer */}
           <View style={styles.demoDrawerContainer}>
@@ -520,5 +609,46 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#166534',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border.light,
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    fontSize: 12,
+    color: colors.textSecondary.light,
+    fontWeight: '500',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    height: 52,
+    marginTop: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  googleIcon: {
+    marginRight: 10,
+  },
+  googleButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#374151',
   },
 });

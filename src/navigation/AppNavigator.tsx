@@ -18,13 +18,14 @@ import { SmartGrowScreen } from '../screens/SmartGrowScreen';
 import { WelfareScreen } from '../screens/WelfareScreen';
 import { MerryGoRoundScreen } from '../screens/MerryGoRoundScreen';
 import { ChatScreen } from '../screens/ChatScreen';
+import { CompleteProfileScreen } from '../screens/CompleteProfileScreen';
 import { MainTabs } from './MainTabs';
 import { colors } from '../theme/colors';
 
 const Stack = createNativeStackNavigator();
 
 export const AppNavigator: React.FC = () => {
-  const { session, member, group, isLoading } = useAuth();
+  const { session, member, group, isLoading, needsPhoneNumber } = useAuth();
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export const AppNavigator: React.FC = () => {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!session ? (
-          // Unauthenticated Stack
+          // ── Unauthenticated ──────────────────────────────────────────────
           hasSeenOnboarding ? (
             <Stack.Group>
               <Stack.Screen name="Login" component={LoginScreen} />
@@ -61,14 +62,17 @@ export const AppNavigator: React.FC = () => {
               <Stack.Screen name="Login" component={LoginScreen} />
             </Stack.Group>
           )
+        ) : needsPhoneNumber ? (
+          // ── Google user — phone number not yet provided ──────────────────
+          <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
         ) : !group ? (
-          // Authenticated but no Chama membership
+          // ── Authenticated but no Chama membership ────────────────────────
           <Stack.Screen name="JoinChama" component={JoinChamaScreen} />
         ) : member?.status === 'pending' ? (
-          // Membership pending admin approval
+          // ── Membership pending admin approval ────────────────────────────
           <Stack.Screen name="PendingApproval" component={PendingScreen} />
         ) : (
-          // Authenticated & Active Chama Member
+          // ── Authenticated & active Chama member ──────────────────────────
           <Stack.Group>
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Members" component={MembersScreen} />

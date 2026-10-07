@@ -4,6 +4,7 @@
     "slug": "smartchama",
     "owner": "chilly_reward1",
     "version": "1.0.0",
+    "scheme": "smartchama",
     "jsEngine": "hermes",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -27,6 +28,7 @@
     },
     "plugins": [
       "expo-secure-store",
+      "expo-web-browser",
       [
         "expo-splash-screen",
         {
