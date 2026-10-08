@@ -86,4 +86,12 @@ export const endpoints = {
     api<StkPushResult>('/api/mpesa/stk-push', { body: input, timeoutMs: 30000 }),
 
   deleteAccount: () => api<{ success: boolean }>('/api/account/delete', { body: { confirm: 'DELETE' } }),
+
+  /** Text a 6-digit code to a number the user wants to add or change. */
+  sendPhoneCode: (phone_number: string) =>
+    api<{ success: boolean; phone: string }>('/api/phone/send-code', { body: { phone_number } }),
+
+  /** Confirm the code; the server then saves the number as verified. */
+  verifyPhone: (phone_number: string, code: string) =>
+    api<{ success: boolean; phone: string }>('/api/phone/verify', { body: { phone_number, code } }),
 };

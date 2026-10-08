@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
+import { endpoints } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { colors } from '../theme/colors';
 
@@ -28,6 +29,10 @@ export const CompleteProfileScreen: React.FC = () => {
   const [fullName, setFullName] = useState(googleName);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
+  // Set once the SMS code has been sent; the number is saved only after the
+  // code is confirmed (the database refuses direct phone writes).
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [code, setCode] = useState('');
 
   // Format to standard 254XXXXXXXXX
   const formatPhone = (raw: string): string => {
@@ -46,7 +51,7 @@ export const CompleteProfileScreen: React.FC = () => {
     return /^254[17]\d{8}$/.test(formatted);
   };
 
-  const handleSave = async () => {
+  const handleSendCode = async () => {
     if (!fullName.trim()) {
       Alert.alert('Required', 'Please enter your full name.');
       return;
@@ -55,7 +60,6 @@ export const CompleteProfileScreen: React.FC = () => {
       Alert.alert('Invalid Number', 'Please enter a valid Kenyan M-Pesa number (e.g. 0712345678).');
       return;
     }
-
     if (!session?.user?.id) {
       Alert.alert('Error', 'Session expired. Please sign in again.');
       return;
@@ -63,27 +67,35 @@ export const CompleteProfileScreen: React.FC = () => {
 
     setLoading(true);
     try {
-      // Stored as +2547XXXXXXXX: the format SMS sign-in, USSD and the web use
-      const formatted = '+' + formatPhone(phoneNumber);
-
       const { error } = await supabase
         .from('profiles')
-        .update({
-          full_name: fullName.trim(),
-          phone_number: formatted,
-        })
+        .update({ full_name: fullName.trim() })
         .eq('id', session.user.id);
+      if (error) throw error;
 
-      if (error) {
-        if (error.code === '23505') throw new Error('That phone number is already linked to another SmartChama account.');
-        throw error;
-      }
+      const res = await endpoints.sendPhoneCode('+' + formatPhone(phoneNumber));
+      setCodeSentTo(res.phone);
+      setCode('');
+    } catch (err: any) {
+      Alert.alert('Could not send code', err.message || 'Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // refreshAuth re-runs fetchUserData — needsPhoneNumber becomes false
-      // and AppNavigator automatically advances to the next screen
+  const handleVerify = async () => {
+    if (!codeSentTo || !/^\d{6}$/.test(code)) {
+      Alert.alert('Enter the code', 'Type the 6-digit code from the SMS.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await endpoints.verifyPhone(codeSentTo, code);
+      // refreshAuth re-runs fetchUserData: needsPhoneNumber becomes false and
+      // AppNavigator moves on to the next screen
       await refreshAuth();
     } catch (err: any) {
-      Alert.alert('Save Failed', err.message || 'Could not save your profile. Please try again.');
+      Alert.alert('Not verified', err.message || 'That code did not work. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -123,42 +135,83 @@ export const CompleteProfileScreen: React.FC = () => {
             onChangeText={setFullName}
           />
 
-          {/* Phone number */}
-          <Text style={[styles.label, { marginTop: 16 }]}>M-Pesa Phone Number</Text>
-          <View style={styles.phoneRow}>
-            <View style={styles.prefixBox}>
-              <Text style={styles.prefixText}>+254</Text>
-            </View>
-            <TextInput
-              style={styles.phoneInput}
-              placeholder="712 345 678"
-              placeholderTextColor="#9CA3AF"
-              keyboardType="phone-pad"
-              maxLength={12}
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-            />
-          </View>
-          <Text style={styles.hint}>
-            This number will receive M-Pesa STK push prompts for payments.
-          </Text>
+          {!codeSentTo ? (
+            <>
+              {/* Phone number */}
+              <Text style={[styles.label, { marginTop: 16 }]}>M-Pesa Phone Number</Text>
+              <View style={styles.phoneRow}>
+                <View style={styles.prefixBox}>
+                  <Text style={styles.prefixText}>+254</Text>
+                </View>
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="712 345 678"
+                  placeholderTextColor="#9CA3AF"
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  maxLength={12}
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  accessibilityLabel="M-Pesa phone number"
+                />
+              </View>
+              <Text style={styles.hint}>
+                We'll text a code to confirm it's your number. It receives M-Pesa prompts for payments.
+              </Text>
 
-          {/* Save button */}
-          <TouchableOpacity
-            style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={loading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.saveButtonText}>Save & Continue</Text>
-              </>
-            )}
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                onPress={handleSendCode}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Send code</Text>
+                )}
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.label, { marginTop: 16 }]}>Code sent to {codeSentTo}</Text>
+              <TextInput
+                style={[styles.input, { letterSpacing: 8, fontSize: 20, textAlign: 'center' }]}
+                placeholder="123456"
+                placeholderTextColor="#9CA3AF"
+                keyboardType="number-pad"
+                autoComplete="sms-otp"
+                textContentType="oneTimeCode"
+                maxLength={6}
+                value={code}
+                onChangeText={(t) => setCode(t.replace(/\D/g, ''))}
+                accessibilityLabel="Verification code"
+              />
+
+              <TouchableOpacity
+                style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                onPress={handleVerify}
+                disabled={loading}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.saveButtonText}>Verify & Continue</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.signOutLink} onPress={handleSendCode} disabled={loading}>
+                <Text style={styles.signOutText}>Resend code</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.signOutLink} onPress={() => setCodeSentTo(null)} disabled={loading}>
+                <Text style={styles.signOutText}>Use a different number</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* Sign-out escape hatch */}
