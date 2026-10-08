@@ -6,7 +6,8 @@ import { supabase } from '../lib/supabase';
 import type { PushNotifications } from './types';
 
 // Expo push (FCM underneath on Android). The server sends via
-// src/lib/push-notifications.ts in the web repo using profiles.push_token.
+// src/lib/push-notifications.ts in the web repo using profile_private.push_token
+// (owner-only: fellow members can't read it and spam notifications).
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -45,11 +46,13 @@ export const expoPush: PushNotifications = {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
     const { data: token } = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
 
-    await supabase.from('profiles').update({ push_token: token }).eq('id', userId);
+    await supabase
+      .from('profile_private')
+      .upsert({ profile_id: userId, push_token: token, updated_at: new Date().toISOString() }, { onConflict: 'profile_id' });
     return token;
   },
 
   async unregister(userId) {
-    await supabase.from('profiles').update({ push_token: null }).eq('id', userId);
+    await supabase.from('profile_private').update({ push_token: null }).eq('profile_id', userId);
   },
 };
