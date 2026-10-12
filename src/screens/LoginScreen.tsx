@@ -19,6 +19,7 @@ import { supabase } from '../lib/supabase';
 import { endpoints } from '../lib/api';
 import { env } from '../config/env';
 import { features } from '../config/features';
+import { useEnabledSocialProviders, SocialProvider } from '../lib/authProviders';
 import { colors } from '../theme/colors';
 
 // Required: warm up the browser on Android for a faster OAuth open
@@ -143,7 +144,12 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
+  // Only providers switched on in Supabase (and allowed by feature flags) are shown
+  const enabledSocial = useEnabledSocialProviders().filter(
+    (p) => (p === 'google' && features.googleSignIn) || (p === 'apple' && features.appleSignIn)
+  );
+
+  const handleOAuthSignIn = async (provider: SocialProvider) => {
     setLoading(true);
     try {
       // smartchama://auth/callback (must be in Supabase Auth -> Redirect URLs)
@@ -152,7 +158,7 @@ export const LoginScreen: React.FC = () => {
       // PKCE: Supabase keeps a code verifier on the device and the redirect
       // carries a one-time code instead of tokens.
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
+        provider,
         options: { redirectTo: redirectUri, skipBrowserRedirect: true },
       });
       if (error) throw error;
@@ -170,7 +176,7 @@ export const LoginScreen: React.FC = () => {
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
       if (exchangeError) throw exchangeError;
     } catch (err: any) {
-      Alert.alert('Google Sign-In Failed', err.message || 'Something went wrong. Please try again.');
+      Alert.alert(`${provider === 'google' ? 'Google' : 'Apple'} sign-in failed`, err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -311,29 +317,50 @@ export const LoginScreen: React.FC = () => {
           )}
 
           {/* Google Sign-In Divider + Button */}
-          {features.googleSignIn && (<>
+          {enabledSocial.length > 0 && (<>
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or</Text>
             <View style={styles.dividerLine} />
           </View>
 
+          {enabledSocial.includes('google') && (
           <TouchableOpacity
             style={styles.googleButton}
-            onPress={handleGoogleSignIn}
+            onPress={() => handleOAuthSignIn('google')}
             disabled={loading}
             activeOpacity={0.85}
+            accessibilityRole="button"
           >
             {loading ? (
               <ActivityIndicator color="#374151" />
             ) : (
               <>
-                {/* Google 'G' icon using Ionicons logo-google */}
                 <Ionicons name="logo-google" size={20} color="#EA4335" style={styles.googleIcon} />
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </>
             )}
           </TouchableOpacity>
+          )}
+
+          {enabledSocial.includes('apple') && (
+          <TouchableOpacity
+            style={[styles.googleButton, styles.appleButton]}
+            onPress={() => handleOAuthSignIn('apple')}
+            disabled={loading}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.googleIcon} />
+                <Text style={[styles.googleButtonText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          )}
           </>)}
 
           {/* Demo accounts: development builds only */}
@@ -605,6 +632,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 3,
     elevation: 2,
+  },
+  appleButton: {
+    backgroundColor: '#000000',
+    borderColor: '#000000',
   },
   googleIcon: {
     marginRight: 10,

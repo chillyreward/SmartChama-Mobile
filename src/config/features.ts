@@ -16,6 +16,8 @@ export const features = {
   phoneOtpLogin: flag(process.env.EXPO_PUBLIC_FEATURE_PHONE_OTP_LOGIN, true),
   /** Google sign-in (needs Google provider + smartchama://auth/callback redirect in Supabase). */
   googleSignIn: flag(process.env.EXPO_PUBLIC_FEATURE_GOOGLE_SIGN_IN, true),
+  /** Apple sign-in (needs the Apple provider switched on in Supabase). */
+  appleSignIn: flag(process.env.EXPO_PUBLIC_FEATURE_APPLE_SIGN_IN, true),
   /** Group chat (needs chama_messages table, migration Part 8). */
   groupChat: flag(process.env.EXPO_PUBLIC_FEATURE_GROUP_CHAT, true),
   /** M-Pesa STK push for contributions and loan repayments. */
