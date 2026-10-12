@@ -25,7 +25,7 @@ export const JoinChamaScreen: React.FC = () => {
 
   const handleJoinChama = async () => {
     if (!groupCode || groupCode.trim().length < 4) {
-      setErrorMsg('Please enter a valid 6-character Chama group code.');
+      setErrorMsg('Please enter your group or invite code.');
       return;
     }
 
@@ -81,7 +81,7 @@ export const JoinChamaScreen: React.FC = () => {
         </View>
         <Text style={styles.cardTitle}>Join a Chama Group</Text>
         <Text style={styles.cardSubtitle}>
-          Enter the 6-character code provided by your Chama admin
+          Enter the group code or invite code from your Chama admin
         </Text>
 
         {errorMsg ? (
@@ -97,7 +97,7 @@ export const JoinChamaScreen: React.FC = () => {
             placeholder="CHAMA1"
             placeholderTextColor="#9CA3AF"
             autoCapitalize="characters"
-            maxLength={8}
+            maxLength={14}
             value={groupCode}
             onChangeText={(text) => {
               setGroupCode(text.toUpperCase());
