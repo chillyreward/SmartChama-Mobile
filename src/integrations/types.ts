@@ -61,7 +61,6 @@ export interface MobileMoney {
     chamaId: string;
     membershipId: string;
     reference?: string;
-    loanId?: string;
   }): Promise<{ contributionId: string; checkoutRequestId: string }>;
 }
 

@@ -27,7 +27,7 @@ const allFeatures: FeatureItem[] = [
   { iconName: 'people', label: 'Members', subtitle: 'Group member roster', route: 'Members' },
   { iconName: 'receipt', label: 'History', subtitle: 'All transaction logs', route: 'History' },
   { iconName: 'trending-up', label: 'SmartGrow', subtitle: 'Investment proposals', route: 'SmartGrow', flag: features.smartGrow },
-  { iconName: 'bar-chart', label: 'Analytics', subtitle: 'Savings & loan charts', route: 'Analytics' },
+  { iconName: 'bar-chart', label: 'Analytics', subtitle: 'Savings & contribution charts', route: 'Analytics' },
   { iconName: 'shield-checkmark', label: 'Trust Score', subtitle: 'Member credibility', route: 'TrustScore' },
   { iconName: 'notifications', label: 'Alerts', subtitle: 'Group notifications', route: 'Alerts' },
   { iconName: 'heart', label: 'Welfare Fund', subtitle: 'Emergency support claims', route: 'Welfare', flag: features.welfare },

@@ -191,7 +191,7 @@ export const LoginScreen: React.FC = () => {
         {/* Top Header Banner */}
         <View style={styles.header}>
           <Text style={styles.logoText}>SmartChama</Text>
-          <Text style={styles.headerSubtitle}>Kenyan Chama Group Savings & Loans</Text>
+          <Text style={styles.headerSubtitle}>Kenyan Chama Group Savings</Text>
         </View>
 
         {/* Auth Card */}

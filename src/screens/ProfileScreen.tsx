@@ -90,7 +90,7 @@ export const ProfileScreen: React.FC = () => {
     Alert.alert(
       'Delete your account?',
       'We will erase your name, phone number, email, ID number and photo, and you will not be able to sign in again. ' +
-        "Your group keeps the records of your contributions and loans for its accounts. You can't undo this.",
+        "Your group keeps the records of your contributions for its accounts. You can't undo this.",
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Learn more', onPress: () => Linking.openURL(env.deleteAccountUrl).catch(() => {}) },
@@ -186,7 +186,7 @@ export const ProfileScreen: React.FC = () => {
           <View style={styles.settingRow}>
             <View style={styles.settingTextGroup}>
               <Text style={styles.settingTitle}>Push Notifications</Text>
-              <Text style={styles.settingSub}>Alerts for contributions & loans</Text>
+              <Text style={styles.settingSub}>Alerts for contributions & payouts</Text>
             </View>
             <Switch
               value={pushNotifs}

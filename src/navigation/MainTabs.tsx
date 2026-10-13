@@ -4,7 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { features } from '../config/features';
 import { DashboardScreen } from '../screens/DashboardScreen';
 import { ContributionsScreen } from '../screens/ContributionsScreen';
-import { LoansScreen } from '../screens/LoansScreen';
 import { WalletScreen } from '../screens/WalletScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { MoreScreen } from '../screens/MoreScreen';
@@ -17,7 +16,6 @@ type IconName = keyof typeof Ionicons.glyphMap;
 const tabIconNames: Record<string, { active: IconName; inactive: IconName }> = {
   Home: { active: 'home', inactive: 'home-outline' },
   Contribute: { active: 'card', inactive: 'card-outline' },
-  Loans: { active: 'cash', inactive: 'cash-outline' },
   Wallet: { active: 'wallet', inactive: 'wallet-outline' },
   Chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
   More: { active: 'grid', inactive: 'grid-outline' },
@@ -53,7 +51,6 @@ export const MainTabs: React.FC = () => {
     >
       <Tab.Screen name="Home" component={DashboardScreen} />
       <Tab.Screen name="Contribute" component={ContributionsScreen} />
-      <Tab.Screen name="Loans" component={LoansScreen} />
       <Tab.Screen name="Wallet" component={WalletScreen} />
       {features.groupChat && <Tab.Screen name="Chat" component={ChatScreen} />}
       <Tab.Screen name="More" component={MoreScreen} />

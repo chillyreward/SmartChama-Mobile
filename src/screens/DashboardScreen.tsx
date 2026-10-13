@@ -31,8 +31,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
         return {
           walletBalance: 0,
           myContributionsSum: 0,
-          activeLoansCount: 0,
-          activeLoansTotal: 0,
           unreadNotifications: 0,
           recentTransactions: [],
         };
@@ -52,15 +50,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
       const sumContribs = contribs?.reduce((acc, c) => acc + Number(c.amount || 0), 0) || 0;
 
-      const { data: loans } = await supabase
-        .from('loans_v2')
-        .select('amount')
-        .eq('membership_id', member.id)
-        .eq('status', 'active');
-
-      const countLoans = loans?.length || 0;
-      const sumLoans = loans?.reduce((acc, l) => acc + Number(l.amount || 0), 0) || 0;
-
       const { count: countNotifs } = await supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
@@ -77,8 +66,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
       return {
         walletBalance: Number(wallet?.balance || 0),
         myContributionsSum: sumContribs,
-        activeLoansCount: countLoans,
-        activeLoansTotal: sumLoans,
         unreadNotifications: countNotifs || 0,
         recentTransactions: txs || [],
       };
@@ -90,8 +77,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
   const walletBalance = dashboardData?.walletBalance || 0;
   const myContributionsSum = dashboardData?.myContributionsSum || 0;
-  const activeLoansCount = dashboardData?.activeLoansCount || 0;
-  const activeLoansTotal = dashboardData?.activeLoansTotal || 0;
   const unreadNotifications = dashboardData?.unreadNotifications || 0;
   const recentTransactions = dashboardData?.recentTransactions || [];
   const loading = isLoading;
@@ -241,12 +226,12 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
 
           <TouchableOpacity
             style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('Loans')}
+            onPress={() => navigation.navigate('MerryGoRound')}
           >
             <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="cash" size={22} color="#D97706" />
+              <Ionicons name="sync" size={22} color="#D97706" />
             </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Request Loan</Text>
+            <Text style={[styles.actionLabel, { color: colors.text }]}>Merry-Go-Round</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -288,17 +273,6 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
             </Text>
             <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>High Credibility</Text>
           </View>
-
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
-            <Text style={[styles.statCardTitle, { color: colors.textSecondary }]}>ACTIVE LOANS</Text>
-            <Text style={[styles.statCardValue, { color: colors.text }]}>
-              {activeLoansCount > 0 ? `KES ${formatCurrency(activeLoansTotal)}` : 'None'}
-            </Text>
-            <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>
-              {activeLoansCount} Active Loan{activeLoansCount === 1 ? '' : 's'}
-            </Text>
-          </View>
         </ScrollView>
 
         {/* Section 6: Recent Transactions */}
@@ -331,7 +305,7 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
               </View>
               <View style={styles.txInfo}>
                 <Text style={[styles.txTitle, { color: colors.text }]}>
-                  {tx.description || (tx.type === 'contribution' ? 'Member Contribution' : 'Chama Loan Disbursal')}
+                  {tx.description || (tx.type === 'contribution' ? 'Member Contribution' : 'Group Transaction')}
                 </Text>
                 <Text style={[styles.txDate, { color: colors.textSecondary }]}>
                   {new Date(tx.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })}

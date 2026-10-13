@@ -36,10 +36,10 @@ const SLIDES: Slide[] = [
   },
   {
     id: '2',
-    badge: 'INSTANT PAYOUTS',
-    title: 'Instant M-Pesa Emergency Loans',
+    badge: 'WELFARE FUND',
+    title: 'Support When It Matters',
     description:
-      'Access low-interest chama loans straight to your M-Pesa wallet with multi-officer approval workflow.',
+      'Help members through emergencies with a transparent welfare fund and a multi-officer approval workflow.',
     image: require('../../assets/welcome_bg_2.jpg'),
   },
   {

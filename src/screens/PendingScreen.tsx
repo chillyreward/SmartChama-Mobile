@@ -20,7 +20,7 @@ export const PendingScreen: React.FC = () => {
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
-            The Chama administrator has been notified. Once approved, your account will immediately gain full access to contributions, loans, and group features.
+            The Chama administrator has been notified. Once approved, your account will immediately gain full access to contributions and group features.
           </Text>
         </View>
 

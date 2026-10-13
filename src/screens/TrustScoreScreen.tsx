@@ -26,14 +26,14 @@ export const TrustScoreScreen: React.FC<{ navigation: any }> = ({ navigation }) 
           </View>
           <Text style={[styles.ratingLabel, { color: colors.text }]}>Excellent Standing</Text>
           <Text style={[styles.ratingSub, { color: colors.textSecondary }]}>
-            You qualify for up to 3x your savings in low-interest Chama loans.
+            Keep contributing on time to stay in top standing with your group.
           </Text>
         </View>
 
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Trust Factors</Text>
         {[
           { title: 'On-Time Contributions', score: '98%', status: 'Great', icon: 'checkmark-circle' },
-          { title: 'Loan Repayment History', score: '100%', status: 'Perfect', icon: 'cash' },
+          { title: 'Contribution Streak', score: '100%', status: 'Perfect', icon: 'flame' },
           { title: 'Meeting Attendance', score: '90%', status: 'Good', icon: 'people' },
         ].map((factor, idx) => (
           <View key={idx} style={[styles.factorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -20,7 +20,7 @@ export const HistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'all' | 'contribution' | 'loan' | 'payout'>('all');
+  const [filter, setFilter] = useState<'all' | 'contribution' | 'payout'>('all');
 
   const fetchHistory = async () => {
     if (!group?.id) return;
@@ -67,7 +67,7 @@ export const HistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
 
       {/* Filter Tabs */}
       <View style={styles.filterRow}>
-        {(['all', 'contribution', 'loan', 'payout'] as const).map((tab) => (
+        {(['all', 'contribution', 'payout'] as const).map((tab) => (
           <TouchableOpacity
             key={tab}
             onPress={() => setFilter(tab)}
@@ -111,7 +111,7 @@ export const HistoryScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.txType, { color: colors.text }]}>
-                  {item.description || item.type.toUpperCase()}
+                  {item.description || (String(item.type) === 'loan_repayment' ? 'REPAYMENT' : String(item.type).startsWith('loan') ? 'PAYOUT' : item.type.toUpperCase())}
                 </Text>
                 <Text style={[styles.txDate, { color: colors.textSecondary }]}>
                   {new Date(item.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', year: 'numeric' })}

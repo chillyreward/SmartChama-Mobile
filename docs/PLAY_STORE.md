@@ -23,7 +23,7 @@ Data is **encrypted in transit** (HTTPS only; cleartext disabled) and users **ca
 | Email address | Yes | No | Account management | No |
 | Phone number | Yes | With Safaricom (M-Pesa payment prompt) and SMS provider | App functionality, fraud prevention | No |
 | Government ID (national ID) | Yes | No | Fraud prevention (member verification) | Yes |
-| Financial info: purchase/payment history, other financial info (contributions, loans) | Yes | No | App functionality | No |
+| Financial info: purchase/payment history, other financial info (contributions, payouts) | Yes | No | App functionality | No |
 | Photos (profile picture) | Yes, if uploaded | No | App functionality | Yes |
 | In-app messages (group chat) | Yes | No | App functionality | Yes |
 | App interactions / crash logs | No (until an analytics or crash integration is enabled: update this form then) | | | |
@@ -38,13 +38,13 @@ Location, contacts, SMS, call log, photos library and files are **not** accessed
 - **Ads:** No ads.
 - **Content rating:** IARC questionnaire, category "Finance"; no user-generated public content (group chat is private to members).
 - **Target audience:** 18+ only.
-- **Financial features:** declare savings groups, member loans and M-Pesa payments.
+- **Financial features:** declare savings groups and M-Pesa payments. The app offers no borrowing or credit.
 - **Government apps:** No.
 
-### Personal loans (Kenya)
-Play's Personal Loans policy requires apps that offer loans to Kenyan users to submit a declaration and a **Digital Credit Provider licence from the Central Bank of Kenya**. SmartChama loans come from a member's own chama fund, not from SmartChama. Get a legal opinion on whether a chama platform counts as a DCP, and answer the Financial features form accordingly. If Google decides it does, a CBK licence (or a licensed partner) is needed before loans can be offered in the Play build. `EXPO_PUBLIC_FEATURE_*` flags let you ship without the loan screens while this is settled.
+### Lending
+The app has no borrowing feature: members save, contribute, run merry-go-rounds and welfare funds. Answer "No" to personal lending in the Financial features declaration, so Play's Kenya Digital Credit Provider (CBK licence) requirement does not apply. If borrowing is ever added back, revisit this section before release.
 
-Personal-loan apps may not access contacts, photos, location or call logs. This app already blocks all of them.
+The app still does not access contacts, photos, location or call logs.
 
 ## 3. Pre-launch checklist
 - [ ] Web migration (`FULL_SCHEMA_MIGRATION.sql`) run on the production Supabase project
@@ -61,7 +61,7 @@ Personal-loan apps may not access contacts, photos, location or call logs. This 
 - No secrets in the app: only the public Supabase anon key; M-Pesa, SMS and service keys stay on the server
 - Every money action is authorised server-side (session + chama role); M-Pesa results are verified with Safaricom before crediting
 - Biometric / device-PIN confirmation before payments, withdrawals and account deletion; app lock after 60s in background
-- Screenshots and screen recording blocked on contributions, loans and wallet screens (FLAG_SECURE)
+- Screenshots and screen recording blocked on contributions and wallet screens (FLAG_SECURE)
 - Balances and statements are never written to unencrypted storage; caches cleared on sign-out
 - R8 code shrinking/obfuscation and resource shrinking in release builds
 - Cleartext HTTP disabled; dangerous permissions removed from the manifest

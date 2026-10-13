@@ -9,14 +9,13 @@ export const mpesa: MobileMoney = {
   id: 'mpesa',
   label: 'M-Pesa',
   enabled: features.mpesaPayments,
-  async requestPayment({ phone, amount, chamaId, membershipId, reference, loanId }) {
+  async requestPayment({ phone, amount, chamaId, membershipId, reference }) {
     const res = await endpoints.stkPush({
       phone,
       amount,
       chama_id: chamaId,
       membership_id: membershipId,
       account_ref: reference,
-      loan_id: loanId,
     });
     return { contributionId: res.contributionId, checkoutRequestId: res.checkoutRequestId };
   },

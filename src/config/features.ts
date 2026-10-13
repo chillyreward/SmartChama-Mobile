@@ -20,7 +20,7 @@ export const features = {
   appleSignIn: flag(process.env.EXPO_PUBLIC_FEATURE_APPLE_SIGN_IN, true),
   /** Group chat (needs chama_messages table, migration Part 8). */
   groupChat: flag(process.env.EXPO_PUBLIC_FEATURE_GROUP_CHAT, true),
-  /** M-Pesa STK push for contributions and loan repayments. */
+  /** M-Pesa STK push for contributions. */
   mpesaPayments: flag(process.env.EXPO_PUBLIC_FEATURE_MPESA_PAYMENTS, true),
   /** AI assistant (web /api/chat). */
   aiAssistant: flag(process.env.EXPO_PUBLIC_FEATURE_AI_ASSISTANT, false),

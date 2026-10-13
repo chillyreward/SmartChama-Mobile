@@ -46,23 +46,10 @@ export interface Transaction {
   id: string;
   chama_id: string;
   membership_id: string;
-  type: 'contribution' | 'loan_disbursement' | 'loan_repayment' | 'withdrawal' | 'penalty';
+  type: 'contribution' | 'withdrawal' | 'penalty';
   amount: number;
   reference?: string;
   status: 'pending' | 'confirmed' | 'failed';
-  created_at: string;
-}
-
-export interface Loan {
-  id: string;
-  membership_id: string;
-  chama_id: string;
-  amount: number;
-  interest_rate: number;
-  status: 'pending' | 'approved' | 'active' | 'repaid' | 'overdue' | 'defaulted';
-  approved_by?: string;
-  approved_at?: string;
-  due_date: string;
   created_at: string;
 }
 

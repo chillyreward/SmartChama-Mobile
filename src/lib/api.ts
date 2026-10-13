@@ -82,7 +82,7 @@ export const endpoints = {
       { body: { code } }
     ),
 
-  stkPush: (input: { phone: string; amount: number; chama_id: string; membership_id: string; account_ref?: string; loan_id?: string }) =>
+  stkPush: (input: { phone: string; amount: number; chama_id: string; membership_id: string; account_ref?: string }) =>
     api<StkPushResult>('/api/mpesa/stk-push', { body: input, timeoutMs: 30000 }),
 
   deleteAccount: () => api<{ success: boolean }>('/api/account/delete', { body: { confirm: 'DELETE' } }),

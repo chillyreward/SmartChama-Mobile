@@ -8,7 +8,7 @@ export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const alerts = [
     { id: '1', title: 'Monthly Contribution Due', desc: 'KSh 2,500 due by 5th of this month', date: 'Today', type: 'reminder' },
-    { id: '2', title: 'Loan Approved', desc: 'Your KSh 15,000 loan was approved by Chairlady', date: 'Yesterday', type: 'success' },
+    { id: '2', title: 'Payout Scheduled', desc: 'Your merry-go-round payout of KSh 15,000 was approved by Chairlady', date: 'Yesterday', type: 'success' },
     { id: '3', title: 'Merry-Go-Round Rotation', desc: 'You are next in queue for payout on July 15', date: '3 days ago', type: 'info' },
   ];
 

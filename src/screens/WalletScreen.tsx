@@ -35,7 +35,6 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
   // Financial Balances
   const [walletBalance, setWalletBalance] = useState(0);
   const [myContributions, setMyContributions] = useState(0);
-  const [outstandingLoansTotal, setOutstandingLoansTotal] = useState(0);
   const [transactions, setTransactions] = useState<any[]>([]);
 
   useSecureScreen('wallet');
@@ -75,17 +74,7 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
       const mySum = contribs?.reduce((acc: number, curr: any) => acc + (Number(curr.amount) || 0), 0) || 0;
       setMyContributions(mySum);
 
-      // 3. Fetch Outstanding Loans Sum
-      const { data: loans } = await supabase
-        .from('loans_v2')
-        .select('balance')
-        .eq('chama_id', group.id)
-        .eq('status', 'approved');
-
-      const loansSum = loans?.reduce((acc: number, curr: any) => acc + (Number(curr.balance) || 0), 0) || 0;
-      setOutstandingLoansTotal(loansSum);
-
-      // 4. Fetch Recent Transactions
+      // 3. Fetch Recent Transactions
       const { data: txs } = await supabase
         .from('transactions_v2')
         .select('*')
@@ -154,8 +143,7 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
     }
   };
 
-  const availableForLoans = Math.max(0, walletBalance - outstandingLoansTotal);
-  const loanReserve = walletBalance * 0.10;
+  const mySharePct = walletBalance > 0 ? Math.min(100, Math.round((myContributions / walletBalance) * 100)) : 0;
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -204,16 +192,9 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
           </View>
 
           <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.gridTitle, { color: colors.textSecondary }]}>Available for Loans</Text>
-            <Text style={[styles.gridValue, { color: colors.text }]}>KSh {availableForLoans.toLocaleString('en-KE')}</Text>
+            <Text style={[styles.gridTitle, { color: colors.textSecondary }]}>My Share of Pool</Text>
+            <Text style={[styles.gridValue, { color: colors.text }]}>{mySharePct}%</Text>
           </View>
-        </View>
-
-        <View style={[styles.infoBanner, { backgroundColor: isDark ? '#1E293B' : '#F8FAFC', borderColor: colors.border }]}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
-          <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-            Loan Reserve Policy: KSh {loanReserve.toLocaleString('en-KE')} (10%) is held in custody as emergency liquidity.
-          </Text>
         </View>
 
         {/* Recent Transactions List */}
@@ -244,7 +225,7 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
 
               <View style={{ flex: 1 }}>
                 <Text style={[styles.txTitle, { color: colors.text }]}>
-                  {tx.description || tx.type.toUpperCase()}
+                  {tx.description || (String(tx.type) === 'loan_repayment' ? 'REPAYMENT' : String(tx.type).startsWith('loan') ? 'PAYOUT' : tx.type.toUpperCase())}
                 </Text>
                 <Text style={[styles.txDate, { color: colors.textSecondary }]}>
                   {new Date(tx.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
