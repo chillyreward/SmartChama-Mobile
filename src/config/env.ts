@@ -39,8 +39,8 @@ export const env = {
   privacyPolicyUrl: `${apiBaseUrl}/privacy`,
   termsUrl: `${apiBaseUrl}/terms`,
   deleteAccountUrl: `${apiBaseUrl}/account/delete`,
-  supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@smartchama.co.ke',
+  supportEmail: process.env.EXPO_PUBLIC_SUPPORT_EMAIL || 'support@akibora.co.ke',
 
-  // Deep link used for Google OAuth (PKCE) redirects: smartchama://auth/callback
-  scheme: 'smartchama',
+  // Deep link used for Google OAuth (PKCE) redirects: akibora://auth/callback
+  scheme: 'akibora',
 } as const;

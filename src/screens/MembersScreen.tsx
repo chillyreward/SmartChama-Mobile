@@ -84,7 +84,7 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
   // Share Group Invite Code
   const handleShareInvite = async () => {
     try {
-      const message = `Join ${group?.name || 'our Chama'} on SmartChama! Use group invite code: ${group?.group_code}. Join at ${env.apiBaseUrl}/signup?code=${group?.group_code}`;
+      const message = `Join ${group?.name || 'our Chama'} on Akibora! Use group invite code: ${group?.group_code}. Join at ${env.apiBaseUrl}/signup?code=${group?.group_code}`;
       await Share.share({ message });
     } catch (error) {
       console.error('Share error:', error);
@@ -125,7 +125,7 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
         </head>
         <body>
           <div class="header">
-            <h1>${group?.name || 'SmartChama'} — Members Roster</h1>
+            <h1>${group?.name || 'Akibora'} — Members Roster</h1>
             <p style="margin:4px 0 0 0; font-size:13px; opacity:0.9;">Total Active Members: ${activeMembers.length} • Generated: ${today}</p>
           </div>
           <table>
@@ -141,7 +141,7 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
               ${rowsHtml.length > 0 ? rowsHtml : '<tr><td colspan="4" style="padding:16px; text-align:center; color:#9CA3AF;">No members found.</td></tr>'}
             </tbody>
           </table>
-          <div class="footer">SmartChama Mobile Ledger • Verified Group Roster • www.smartchama.co.ke</div>
+          <div class="footer">Akibora Mobile Ledger • Verified Group Roster • www.akibora.co.ke</div>
         </body>
         </html>
       `;
@@ -154,7 +154,7 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
         await Sharing.shareAsync(uri, {
           UTI: '.pdf',
           mimeType: 'application/pdf',
-          dialogTitle: `${group?.name || 'SmartChama'} Members Roster PDF`,
+          dialogTitle: `${group?.name || 'Akibora'} Members Roster PDF`,
         });
       } else {
         await Share.share({ title: 'Members Roster PDF', url: uri });
@@ -244,7 +244,7 @@ export const MembersScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Group & Members</Text>
-          <Text style={styles.headerSub}>{group?.name || 'SmartChama Group'}</Text>
+          <Text style={styles.headerSub}>{group?.name || 'Akibora Group'}</Text>
         </View>
 
         {/* Section 1: Group Info Card */}

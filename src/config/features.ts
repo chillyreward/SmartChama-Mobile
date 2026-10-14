@@ -14,7 +14,7 @@ const flag = (raw: string | undefined, fallback: boolean): boolean => {
 export const features = {
   /** Phone number + SMS code sign-in (needs SMS provider on the web API). */
   phoneOtpLogin: flag(process.env.EXPO_PUBLIC_FEATURE_PHONE_OTP_LOGIN, true),
-  /** Google sign-in (needs Google provider + smartchama://auth/callback redirect in Supabase). */
+  /** Google sign-in (needs Google provider + akibora://auth/callback redirect in Supabase). */
   googleSignIn: flag(process.env.EXPO_PUBLIC_FEATURE_GOOGLE_SIGN_IN, true),
   /** Apple sign-in (needs the Apple provider switched on in Supabase). */
   appleSignIn: flag(process.env.EXPO_PUBLIC_FEATURE_APPLE_SIGN_IN, true),

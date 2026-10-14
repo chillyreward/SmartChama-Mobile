@@ -62,7 +62,7 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
             member_id: 'system',
             content: `Karibu to ${group.name} group chat! 💬 Share updates, meeting notes, and payment queries here.`,
             created_at: new Date().toISOString(),
-            sender_name: 'SmartChama Assistant',
+            sender_name: 'Akibora Assistant',
           },
         ]);
       }

@@ -28,7 +28,7 @@ export const AppLock: React.FC<Props> = ({ enabled, onSignOut, children }) => {
     if (prompting.current) return;
     prompting.current = true;
     setMessage('');
-    const result = await confirmWithBiometrics('Unlock SmartChama');
+    const result = await confirmWithBiometrics('Unlock Akibora');
     prompting.current = false;
     if (result === 'ok' || result === 'unavailable') {
       setLocked(false);
@@ -63,7 +63,7 @@ export const AppLock: React.FC<Props> = ({ enabled, onSignOut, children }) => {
       {locked && (
         <View style={styles.overlay} accessibilityViewIsModal>
           <Ionicons name="lock-closed" size={48} color={colors.primary} />
-          <Text style={styles.title}>SmartChama is locked</Text>
+          <Text style={styles.title}>Akibora is locked</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           <TouchableOpacity style={styles.button} onPress={unlock} accessibilityRole="button">
             <Text style={styles.buttonText}>Unlock</Text>

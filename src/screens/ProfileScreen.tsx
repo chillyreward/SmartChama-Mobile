@@ -98,7 +98,7 @@ export const ProfileScreen: React.FC = () => {
           text: 'Delete account',
           style: 'destructive',
           onPress: () =>
-            Alert.alert('Are you sure?', 'This permanently deletes your SmartChama account.', [
+            Alert.alert('Are you sure?', 'This permanently deletes your Akibora account.', [
               { text: 'Keep my account', style: 'cancel' },
               { text: 'Yes, delete', style: 'destructive', onPress: performDelete },
             ]),
@@ -108,7 +108,7 @@ export const ProfileScreen: React.FC = () => {
   };
 
   const handleSignOutConfirm = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of SmartChama?', [
+    Alert.alert('Sign Out', 'Are you sure you want to sign out of Akibora?', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: signOut },
     ]);
@@ -129,7 +129,7 @@ export const ProfileScreen: React.FC = () => {
             <Text style={styles.avatarLargeText}>{getInitials(member?.profiles?.full_name)}</Text>
           </View>
 
-          <Text style={styles.profileName}>{member?.profiles?.full_name || 'SmartChama Member'}</Text>
+          <Text style={styles.profileName}>{member?.profiles?.full_name || 'Akibora Member'}</Text>
           <Text style={styles.profileContact}>
             {member?.profiles?.phone_number || member?.profiles?.email || '—'}
           </Text>
@@ -156,7 +156,7 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Chama Group</Text>
-            <Text style={styles.infoValue}>{group?.name || 'SmartChama'}</Text>
+            <Text style={styles.infoValue}>{group?.name || 'Akibora'}</Text>
           </View>
           <View style={styles.infoDivider} />
           <View style={styles.infoRow}>

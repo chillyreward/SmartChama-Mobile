@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "SmartChama",
+    "name": "Akibora",
     "slug": "smartchama",
     "owner": "chilly_reward1",
     "version": "1.1.0",
-    "scheme": "smartchama",
+    "scheme": "akibora",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "co.ke.smartchama.app"
+      "bundleIdentifier": "co.ke.akibora.app"
     },
     "android": {
-      "package": "co.ke.smartchama.app",
+      "package": "co.ke.akibora.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
@@ -70,7 +70,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "SmartChama uses Face ID to confirm payments and unlock the app."
+          "faceIDPermission": "Akibora uses Face ID to confirm payments and unlock the app."
         }
       ],
       [

@@ -117,7 +117,7 @@ export const CompleteProfileScreen: React.FC = () => {
 
         <Text style={styles.title}>One more step</Text>
         <Text style={styles.subtitle}>
-          We need your M-Pesa number to complete your SmartChama profile.
+          We need your M-Pesa number to complete your Akibora profile.
           This is used for contributions and payouts.
         </Text>
 

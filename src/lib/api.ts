@@ -1,7 +1,7 @@
 import { env } from '../config/env';
 import { supabase } from './supabase';
 
-// Single client for the SmartChama web API (Next.js on Vercel). Every request
+// Single client for the Akibora web API (Next.js on Vercel). Every request
 // carries the user's Supabase access token as a Bearer token; the API derives
 // the user from it and never trusts ids sent in the body.
 
@@ -48,7 +48,7 @@ export async function api<T = any>(path: string, options: ApiOptions = {}): Prom
     throw new ApiError(
       err?.name === 'AbortError'
         ? 'The server took too long to respond. Check your connection and try again.'
-        : 'Could not reach SmartChama. Check your internet connection.',
+        : 'Could not reach Akibora. Check your internet connection.',
       0
     );
   } finally {

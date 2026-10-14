@@ -1,6 +1,6 @@
-# Publishing SmartChama on Google Play
+# Publishing Akibora on Google Play
 
-Package: `co.ke.smartchama.app` · target SDK 36 (Android 16) · min SDK 24 (Android 7)
+Package: `co.ke.akibora.app` · target SDK 36 (Android 16) · min SDK 24 (Android 7)
 
 ## 1. Build
 
@@ -48,7 +48,7 @@ The app still does not access contacts, photos, location or call logs.
 
 ## 3. Pre-launch checklist
 - [ ] Web migration (`FULL_SCHEMA_MIGRATION.sql`) run on the production Supabase project
-- [ ] Supabase Auth → Redirect URLs includes `smartchama://auth/callback`
+- [ ] Supabase Auth → Redirect URLs includes `akibora://auth/callback`
 - [ ] `eas.json` production env points at production Supabase + API
 - [ ] Privacy policy lists everything in the Data safety table above
 - [ ] Test on Android 16 and a small phone (360dp); edge-to-edge screens not clipped

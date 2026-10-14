@@ -44,7 +44,7 @@ export const MoreScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={[styles.title, { color: colors.text }]}>All Services</Text>
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>SmartChama Chama Modules & Tools</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>Akibora Chama Modules & Tools</Text>
 
         <View style={styles.grid}>
           {extraFeatures.map((item, index) => (

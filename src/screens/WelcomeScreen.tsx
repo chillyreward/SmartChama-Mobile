@@ -104,7 +104,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ navigation }) => {
                 <View style={styles.logoBadge}>
                   <Ionicons name="people" size={20} color="#FFFFFF" />
                 </View>
-                <Text style={styles.brandName}>SmartChama</Text>
+                <Text style={styles.brandName}>Akibora</Text>
               </View>
               <TouchableOpacity
                 onPress={() => handleFinishOnboarding('login')}

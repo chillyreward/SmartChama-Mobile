@@ -12,7 +12,7 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://jwfgvbmoegejgbcqaruk.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3Zmd2Ym1vZWdlamdiY3FhcnVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjkxMzksImV4cCI6MjEwNzAwNTEzOX0.QHM2l-TK2e4gNMNXTkbkmX17qzqLEnQ7rbQf_lUgEY4",
         "EXPO_PUBLIC_API_BASE_URL": "https://smart-chama10.vercel.app",
-        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@smartchama.co.ke",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@akibora.co.ke",
         "EXPO_PUBLIC_APP_ENV": "development",
         "EXPO_PUBLIC_FEATURE_DEMO_LOGIN": "true"
       }
@@ -27,7 +27,7 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://jwfgvbmoegejgbcqaruk.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3Zmd2Ym1vZWdlamdiY3FhcnVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjkxMzksImV4cCI6MjEwNzAwNTEzOX0.QHM2l-TK2e4gNMNXTkbkmX17qzqLEnQ7rbQf_lUgEY4",
         "EXPO_PUBLIC_API_BASE_URL": "https://smart-chama10.vercel.app",
-        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@smartchama.co.ke",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@akibora.co.ke",
         "EXPO_PUBLIC_APP_ENV": "preview"
       }
     },
@@ -41,7 +41,7 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://jwfgvbmoegejgbcqaruk.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3Zmd2Ym1vZWdlamdiY3FhcnVrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0MjkxMzksImV4cCI6MjEwNzAwNTEzOX0.QHM2l-TK2e4gNMNXTkbkmX17qzqLEnQ7rbQf_lUgEY4",
         "EXPO_PUBLIC_API_BASE_URL": "https://smart-chama10.vercel.app",
-        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@smartchama.co.ke",
+        "EXPO_PUBLIC_SUPPORT_EMAIL": "support@akibora.co.ke",
         "EXPO_PUBLIC_APP_ENV": "production"
       }
     }

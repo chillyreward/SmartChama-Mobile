@@ -81,7 +81,7 @@ export const LoginScreen: React.FC = () => {
       if (data.isNewUser || !data.token_hash) {
         Alert.alert(
           'No account for this number',
-          'This phone number is not linked to a SmartChama account yet. Sign up with email or Google first, then add your phone number.'
+          'This phone number is not linked to an Akibora account yet. Sign up with email or Google first, then add your phone number.'
         );
         return;
       }
@@ -152,7 +152,7 @@ export const LoginScreen: React.FC = () => {
   const handleOAuthSignIn = async (provider: SocialProvider) => {
     setLoading(true);
     try {
-      // smartchama://auth/callback (must be in Supabase Auth -> Redirect URLs)
+      // akibora://auth/callback (must be in Supabase Auth -> Redirect URLs)
       const redirectUri = makeRedirectUri({ scheme: env.scheme, path: 'auth/callback' });
 
       // PKCE: Supabase keeps a code verifier on the device and the redirect
@@ -190,7 +190,7 @@ export const LoginScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Top Header Banner */}
         <View style={styles.header}>
-          <Text style={styles.logoText}>SmartChama</Text>
+          <Text style={styles.logoText}>Akibora</Text>
           <Text style={styles.headerSubtitle}>Kenyan Chama Group Savings</Text>
         </View>
 

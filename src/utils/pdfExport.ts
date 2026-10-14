@@ -81,7 +81,7 @@ export async function generateMemberStatementPDF({
         <body>
           <div class="header">
             <div>
-              <div class="brand">SmartChama</div>
+              <div class="brand">Akibora</div>
               <div class="chama-subtitle">${chamaName} — Official Member Statement</div>
             </div>
             <div>
@@ -121,7 +121,7 @@ export async function generateMemberStatementPDF({
           </table>
 
           <div class="footer">
-            SmartChama Financial Systems • Bank-grade encrypted statement • Certified by Group Officers
+            Akibora Financial Systems • Bank-grade encrypted statement • Certified by Group Officers
           </div>
         </body>
       </html>

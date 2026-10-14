@@ -104,7 +104,7 @@ export const WalletScreen: React.FC<{ navigation?: any }> = ({ navigation }) => 
     const memberName = (member as any)?.full_name || member?.profiles?.full_name || 'Member';
     await generateMemberStatementPDF({
       memberName,
-      chamaName: group?.name || 'SmartChama Group',
+      chamaName: group?.name || 'Akibora Group',
       totalBalance: walletBalance,
       transactions,
     });

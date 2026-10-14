@@ -133,7 +133,7 @@ export const ContributionsScreen: React.FC = () => {
         amount: numAmount,
         chamaId: group!.id,
         membershipId: member!.id,
-        reference: group?.name?.slice(0, 12) || 'SmartChama',
+        reference: group?.name?.slice(0, 12) || 'Akibora',
       });
 
       setStkStatus('waiting');
@@ -171,7 +171,7 @@ export const ContributionsScreen: React.FC = () => {
     if (adminPhone.startsWith('0')) adminPhone = '254' + adminPhone.slice(1);
     if (!adminPhone.startsWith('254') && adminPhone.length > 0) adminPhone = '254' + adminPhone;
 
-    const msg = `Hi, I just paid KSh ${amountVal} contribution for ${group?.name || 'SmartChama'} via SmartChama. Ref: ${receipt}`;
+    const msg = `Hi, I just paid KSh ${amountVal} contribution for ${group?.name || 'Akibora'} via Akibora. Ref: ${receipt}`;
     const url = `whatsapp://send?phone=${adminPhone}&text=${encodeURIComponent(msg)}`;
 
     Linking.canOpenURL(url).then((ok) => {
@@ -204,7 +204,7 @@ export const ContributionsScreen: React.FC = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Contributions</Text>
-        <Text style={styles.headerSub}>{group?.name || 'SmartChama Savings'}</Text>
+        <Text style={styles.headerSub}>{group?.name || 'Akibora Savings'}</Text>
       </View>
 
       {/* Summary Card */}
