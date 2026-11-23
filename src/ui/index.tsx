@@ -4,6 +4,7 @@
 import React from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -109,6 +110,18 @@ export function T({
 
 export function Money({ value, v = 'money', tone = 'ink', style }: { value: number | null | undefined; v?: 'money' | 'moneyLg' | 'title' | 'display'; tone?: Tone; style?: StyleProp<TextStyle> }) {
   return <T v={v} tone={tone} style={style}>{formatKsh(value)}</T>;
+}
+
+/** The Akibora logo: the wallet mark from SmartChama on a white tile, then the name. */
+export function Logo({ size = 34, tone = 'ink' }: { size?: number; tone?: Tone }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} accessible accessibilityLabel="Akibora">
+      <View style={{ width: size, height: size, borderRadius: size * 0.28, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' }}>
+        <Image source={require('../../assets/logo-mark.png')} style={{ width: size * 0.82, height: size * 0.82 }} resizeMode="contain" />
+      </View>
+      <T v="title" tone={tone}>akibora</T>
+    </View>
+  );
 }
 
 /* ------------------------------------------------------------------ */

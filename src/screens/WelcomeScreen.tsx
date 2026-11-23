@@ -3,7 +3,7 @@ import { FlatList, StatusBar, useWindowDimensions, View, type ViewToken } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../contexts/ThemeContext';
-import { Button, Ring, T, type Seat } from '../ui';
+import { Button, Ring, T, type Seat, Logo } from '../ui';
 
 const SLIDES = [
   {
@@ -56,7 +56,7 @@ export const WelcomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => 
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingTop: 8 }}>
-          <T v="title" tone="onForest">Akibora</T>
+          <Logo tone="onForest" />
           <View style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, borderWidth: 1, borderColor: colors.moss }}>
             <T v="caption" tone="onForest2">Early access</T>
           </View>

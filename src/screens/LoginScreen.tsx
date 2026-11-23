@@ -3,7 +3,7 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../contexts/ThemeContext';
-import { Button, Field, Notice, Segmented, T } from '../ui';
+import { Button, Field, Notice, Segmented, T, Logo } from '../ui';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as Linking from 'expo-linking';
@@ -180,7 +180,7 @@ export const LoginScreen: React.FC<{ route?: any; navigation?: any }> = ({ route
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.page }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 40, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-          <T v="title" style={{ marginTop: 4 }}>Akibora</T>
+          <Logo />
 
           <T v="hero" style={{ marginTop: 36 }}>{isSignup ? 'Join your group' : 'Welcome back'}</T>
           <T v="body" tone="ink2" style={{ marginTop: 10 }}>

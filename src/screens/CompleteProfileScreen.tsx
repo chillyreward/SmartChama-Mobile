@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../contexts/ThemeContext';
-import { Button, Field, Notice, T } from '../ui';
+import { Button, Field, Notice, T, Logo } from '../ui';
 import { supabase } from '../lib/supabase';
 import { endpoints } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -96,7 +96,7 @@ export const CompleteProfileScreen: React.FC = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.page }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 22, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-          <T v="title">Akibora</T>
+          <Logo />
           <T v="hero" style={{ marginTop: 36 }}>{codeSentTo ? 'Check your messages' : 'One more step'}</T>
           <T v="body" tone="ink2" style={{ marginTop: 10 }}>
             {codeSentTo

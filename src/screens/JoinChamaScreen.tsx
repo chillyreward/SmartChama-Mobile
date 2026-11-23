@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { endpoints } from '../lib/api';
 import { fonts } from '../theme/fonts';
-import { Button, Notice, T } from '../ui';
+import { Button, Notice, T, Logo } from '../ui';
 import { WaitingForApproval } from './PendingScreen';
 
 export const JoinChamaScreen: React.FC = () => {
@@ -41,7 +41,7 @@ export const JoinChamaScreen: React.FC = () => {
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.page }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 22, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-          <T v="title">Akibora</T>
+          <Logo />
           <T v="hero" style={{ marginTop: 36 }}>Join your group</T>
           <T v="body" tone="ink2" style={{ marginTop: 10 }}>Type the code your chair or treasurer shared. An official approves each new member.</T>
 
