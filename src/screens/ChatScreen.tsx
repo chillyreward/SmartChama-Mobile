@@ -1,16 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Avatar, Empty, IconButton, Loading, T } from '../ui';
+import { fonts } from '../theme/fonts';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
@@ -32,7 +24,7 @@ interface Message {
 
 export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const { member, group } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,21 +43,7 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      if (!error && data) {
-        setMessages(data);
-      } else {
-        // Fallback default message for empty or new chat channels
-        setMessages([
-          {
-            id: 'welcome-1',
-            chama_id: group.id,
-            member_id: 'system',
-            content: `Karibu to ${group.name} group chat! 💬 Share updates, meeting notes, and payment queries here.`,
-            created_at: new Date().toISOString(),
-            sender_name: 'Akibora Assistant',
-          },
-        ]);
-      }
+      if (!error && data) setMessages(data);
     } catch (err) {
       logger.error('Error fetching chat messages', err);
     } finally {
@@ -141,87 +119,44 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
     }
   };
 
-  const getInitials = (name: string) => {
-    if (!name) return '??';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .substring(0, 2)
-      .toUpperCase();
-  };
+  // Chat is both a tab and a pushed screen; only the pushed one gets a back button
+  const inTab = navigation?.getState?.()?.type === 'tab';
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {navigation?.canGoBack() && (
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-        )}
-        <View style={styles.headerInfo}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{group?.name || 'Group Chat'}</Text>
-          <Text style={[styles.headerSub, { color: colors.primary }]}>● Realtime Active</Text>
+    <SafeAreaView edges={['top', 'left', 'right']} style={{ flex: 1, backgroundColor: colors.page }}>
+      <View style={[styles.header, { borderBottomColor: colors.line }]}>
+        {!inTab && navigation?.canGoBack?.() ? <IconButton icon="arrow-back" label="Back" onPress={() => navigation.goBack()} /> : null}
+        <View style={{ flex: 1 }}>
+          <T v="title" numberOfLines={1}>{group?.name || 'Group chat'}</T>
+          <T v="caption" tone="ink2">Everyone in the group can read this</T>
         </View>
       </View>
 
-      {/* Messages List & Input */}
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-      >
-        {loading ? (
-          <View style={styles.loadingCenter}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : (
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={0}>
+        {loading ? <Loading /> : (
           <FlatList
             data={messages}
             keyExtractor={(item) => item.id}
             inverted
-            contentContainerStyle={styles.listContent}
-            renderItem={({ item }) => {
+            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, flexGrow: messages.length ? 0 : 1 }}
+            ListEmptyComponent={
+              <View style={{ flex: 1, justifyContent: 'center', transform: [{ scaleY: -1 }], paddingHorizontal: 8 }}>
+                <Empty icon="chatbubble-outline" title="Start the conversation">Share meeting notes, reminders and questions with the whole group.</Empty>
+              </View>
+            }
+            renderItem={({ item, index }) => {
               const isMe = item.member_id === member?.id;
-              const nameToShow =
-                item.sender_name || item.chama_memberships?.profiles?.full_name || 'Member';
-              const formattedTime = new Date(item.created_at).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-
+              const name = item.sender_name || item.chama_memberships?.profiles?.full_name || 'Member';
+              const older = messages[index + 1];
+              const grouped = older && older.member_id === item.member_id;
+              const time = new Date(item.created_at).toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit' });
               return (
-                <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
-                  {!isMe && (
-                    <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-                      <Text style={styles.avatarText}>{getInitials(nameToShow)}</Text>
-                    </View>
-                  )}
-                  <View
-                    style={[
-                      styles.msgBubble,
-                      isMe
-                        ? { backgroundColor: colors.primary, borderBottomRightRadius: 2 }
-                        : {
-                            backgroundColor: colors.card,
-                            borderColor: colors.border,
-                            borderWidth: 1,
-                            borderBottomLeftRadius: 2,
-                          },
-                    ]}
-                  >
-                    {!isMe && (
-                      <Text style={[styles.senderName, { color: colors.primary }]}>
-                        {nameToShow}
-                      </Text>
-                    )}
-                    <Text style={[styles.msgText, { color: isMe ? '#FFFFFF' : colors.text }]}>
-                      {item.content}
-                    </Text>
-                    <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.7)' : colors.textSecondary }]}>
-                      {formattedTime}
-                    </Text>
+                <View style={{ flexDirection: 'row', justifyContent: isMe ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 8, marginTop: grouped ? 3 : 12 }}>
+                  {!isMe ? (grouped ? <View style={{ width: 30 }} /> : <Avatar name={name} size={30} tone="sage" />) : null}
+                  <View style={{ maxWidth: '78%', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: isMe ? colors.primary : colors.surface, borderWidth: isMe ? 0 : 1, borderColor: colors.line, borderBottomRightRadius: isMe ? 6 : 20, borderBottomLeftRadius: isMe ? 20 : 6 }}>
+                    {!isMe && !grouped ? <T v="caption" tone="brand" style={{ marginBottom: 2 }}>{name}</T> : null}
+                    <T v="body" style={{ color: isMe ? colors.onPrimary : colors.ink }}>{item.content}</T>
+                    <T v="caption" style={{ color: isMe ? colors.onPrimary : colors.ink3, opacity: isMe ? 0.7 : 1, marginTop: 3, alignSelf: 'flex-end', fontSize: 11 }}>{time}</T>
                   </View>
                 </View>
               );
@@ -229,26 +164,26 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
           />
         )}
 
-        {/* Input Bar */}
-        <View style={[styles.inputBar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+        <View style={[styles.inputBar, { borderTopColor: colors.line, backgroundColor: colors.page, paddingBottom: inTab ? 104 : 16 }]}>
           <TextInput
-            style={[
-              styles.input,
-              { backgroundColor: isDark ? '#1F2937' : '#F8FAFC', color: colors.text, borderColor: colors.border },
-            ]}
-            placeholder="Type a message..."
-            placeholderTextColor={colors.textSecondary}
+            style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.line, color: colors.ink, fontFamily: fonts.body }]}
+            placeholder="Write to the group"
+            placeholderTextColor={colors.ink3}
             value={text}
             onChangeText={setText}
             multiline
+            maxLength={2000}
+            accessibilityLabel="Message"
           />
-          <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: text.trim() ? colors.primary : colors.border }]}
+          <Pressable
             onPress={handleSend}
             disabled={!text.trim() || sending}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            style={[styles.send, { backgroundColor: text.trim() ? colors.mint : colors.raised }]}
           >
-            <Ionicons name="send" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+            <Ionicons name="arrow-up" size={20} color={text.trim() ? colors.forest : colors.ink3} />
+          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -256,108 +191,8 @@ export const ChatScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  backBtn: {
-    padding: 6,
-    marginRight: 10,
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-  },
-  headerSub: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  loadingCenter: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  msgRow: {
-    flexDirection: 'row',
-    marginVertical: 4,
-    alignItems: 'flex-end',
-  },
-  msgRowMe: {
-    justifyContent: 'flex-end',
-  },
-  msgRowOther: {
-    justifyContent: 'flex-start',
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-    marginBottom: 2,
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  msgBubble: {
-    maxWidth: '78%',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  senderName: {
-    fontSize: 11,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  msgText: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  msgTime: {
-    fontSize: 10,
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    gap: 10,
-  },
-  input: {
-    flex: 1,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    maxHeight: 100,
-    fontSize: 15,
-    borderWidth: 1,
-  },
-  sendBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 16, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  input: { flex: 1, minHeight: 46, maxHeight: 120, borderRadius: 23, borderWidth: 1, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 16 },
+  send: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center' },
 });

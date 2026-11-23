@@ -3,7 +3,8 @@ import { AppState, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { features } from '../config/features';
 import { confirmWithBiometrics } from './biometric';
-import { colors } from '../theme/colors';
+import { fixed } from '../theme/colors';
+import { fonts } from '../theme/fonts';
 
 // Locks the app when it returns from the background after LOCK_AFTER_MS.
 // Content underneath stays mounted (no data refetch) but is fully covered.
@@ -62,7 +63,7 @@ export const AppLock: React.FC<Props> = ({ enabled, onSignOut, children }) => {
       {children}
       {locked && (
         <View style={styles.overlay} accessibilityViewIsModal>
-          <Ionicons name="lock-closed" size={48} color={colors.primary} />
+          <Ionicons name="lock-closed" size={40} color={fixed.mint} />
           <Text style={styles.title}>Akibora is locked</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
           <TouchableOpacity style={styles.button} onPress={unlock} accessibilityRole="button">
@@ -79,17 +80,10 @@ export const AppLock: React.FC<Props> = ({ enabled, onSignOut, children }) => {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  overlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: colors.background.light,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    padding: 24,
-  },
-  title: { fontSize: 20, fontWeight: '700', color: colors.text.light },
-  message: { fontSize: 14, color: '#B91C1C' },
-  button: { backgroundColor: colors.primary, paddingVertical: 14, paddingHorizontal: 48, borderRadius: 14 },
-  buttonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600' },
-  link: { color: colors.textSecondary.light, fontSize: 14, marginTop: 8 },
+  overlay: { ...StyleSheet.absoluteFill, backgroundColor: fixed.forest, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
+  title: { fontFamily: fonts.display, fontSize: 30, color: fixed.onForest },
+  message: { fontFamily: fonts.body, fontSize: 15, color: fixed.onForest2, textAlign: 'center' },
+  button: { marginTop: 10, height: 54, minWidth: 220, borderRadius: 999, backgroundColor: fixed.mint, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  buttonText: { fontFamily: fonts.semibold, fontSize: 16, color: fixed.forest },
+  link: { fontFamily: fonts.medium, fontSize: 14, color: fixed.onForest2, marginTop: 6, padding: 8 },
 });

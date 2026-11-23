@@ -20,7 +20,7 @@ import { MerryGoRoundScreen } from '../screens/MerryGoRoundScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { CompleteProfileScreen } from '../screens/CompleteProfileScreen';
 import { MainTabs } from './MainTabs';
-import { colors } from '../theme/colors';
+import { fixed } from '../theme/colors';
 
 const Stack = createNativeStackNavigator();
 
@@ -41,7 +41,7 @@ export const AppNavigator: React.FC = () => {
   if (isLoading || hasSeenOnboarding === null) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={fixed.mint} />
       </View>
     );
   }
@@ -95,7 +95,7 @@ export const AppNavigator: React.FC = () => {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: colors.background.light,
+    backgroundColor: fixed.forest,
     alignItems: 'center',
     justifyContent: 'center',
   },

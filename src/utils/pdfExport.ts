@@ -2,6 +2,8 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Alert } from 'react-native';
 
+const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
 export interface TransactionItem {
   id?: string;
   created_at: string;
@@ -32,7 +34,7 @@ export async function generateMemberStatementPDF({
     });
 
     const rowsHtml = transactions.map((t) => {
-      const isPositive = Number(t.amount) > 0;
+      const isPositive = ['contribution', 'repayment', 'loan_repayment', 'penalty', 'interest', 'deposit', 'smartgrow_return'].includes(t.type);
       const formattedAmt = Math.abs(Number(t.amount)).toLocaleString('en-KE');
       const dateStr = new Date(t.created_at).toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -41,16 +43,16 @@ export async function generateMemberStatementPDF({
       });
 
       return `
-        <tr style="border-bottom: 1px solid #E2E8F0;">
-          <td style="padding: 10px 12px; font-size: 13px; color: #334155;">${dateStr}</td>
-          <td style="padding: 10px 12px; font-size: 13px; color: #0F172A; font-weight: 600; text-transform: capitalize;">${t.type.replace('_', ' ')}</td>
-          <td style="padding: 10px 12px; font-size: 12px; font-family: monospace; color: #64748B;">${t.reference || 'N/A'}</td>
+        <tr style="border-bottom: 1px solid #C6D8CA;">
+          <td style="padding: 10px 12px; font-size: 13px; color: #2B4637;">${dateStr}</td>
+          <td style="padding: 10px 12px; font-size: 13px; color: #0F241A; font-weight: 600; text-transform: capitalize;">${t.type.replace('_', ' ')}</td>
+          <td style="padding: 10px 12px; font-size: 12px; font-family: monospace; color: #4C6858;">${esc(t.reference || '')}</td>
           <td style="padding: 10px 12px; font-size: 12px; text-align: center;">
             <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; background-color: ${t.status === 'confirmed' ? '#DCFCE7' : '#FEF3C7'}; color: ${t.status === 'confirmed' ? '#166534' : '#92400E'};">
               ${(t.status || 'confirmed').toUpperCase()}
             </span>
           </td>
-          <td style="padding: 10px 12px; font-size: 13px; font-family: monospace; font-weight: bold; text-align: right; color: ${isPositive ? '#16A34A' : '#DC2626'};">
+          <td style="padding: 10px 12px; font-size: 13px; font-family: monospace; font-weight: bold; text-align: right; color: ${isPositive ? '#1F6B4A' : '#0F241A'};">
             ${isPositive ? '+' : '-'} KSh ${formattedAmt}
           </td>
         </tr>
@@ -63,26 +65,26 @@ export async function generateMemberStatementPDF({
         <head>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
           <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 24px; color: #0F172A; margin: 0; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #22C55E; padding-bottom: 16px; margin-bottom: 20px; }
-            .brand { color: #22C55E; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; }
-            .chama-subtitle { color: #64748B; font-size: 12px; margin-top: 4px; }
-            .report-title { font-size: 18px; font-weight: bold; color: #0F172A; text-align: right; }
-            .report-date { font-size: 12px; color: #64748B; margin-top: 4px; text-align: right; }
-            .meta-box { background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; }
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 24px; color: #0F241A; margin: 0; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1F6B4A; padding-bottom: 16px; margin-bottom: 20px; }
+            .brand { color: #1F6B4A; font-size: 24px; font-weight: 900; letter-spacing: -0.5px; }
+            .chama-subtitle { color: #4C6858; font-size: 12px; margin-top: 4px; }
+            .report-title { font-size: 18px; font-weight: bold; color: #0F241A; text-align: right; }
+            .report-date { font-size: 12px; color: #4C6858; margin-top: 4px; text-align: right; }
+            .meta-box { background-color: #EDF4EE; border: 1px solid #C6D8CA; border-radius: 12px; padding: 16px; margin-bottom: 24px; display: flex; justify-content: space-between; }
             .meta-item { flex: 1; }
-            .meta-label { font-size: 10px; font-weight: bold; color: #64748B; text-transform: uppercase; letter-spacing: 0.5px; }
-            .meta-value { font-size: 15px; font-weight: bold; color: #0F172A; margin-top: 4px; }
+            .meta-label { font-size: 10px; font-weight: bold; color: #4C6858; text-transform: uppercase; letter-spacing: 0.5px; }
+            .meta-value { font-size: 15px; font-weight: bold; color: #0F241A; margin-top: 4px; }
             table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-            th { background-color: #F1F5F9; color: #475569; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 10px 12px; text-align: left; border-bottom: 2px solid #E2E8F0; }
-            .footer { margin-top: 40px; text-align: center; border-top: 1px solid #E2E8F0; padding-top: 16px; font-size: 11px; color: #94A3B8; }
+            th { background-color: #F1F5F9; color: #475569; font-size: 11px; font-weight: 800; text-transform: uppercase; padding: 10px 12px; text-align: left; border-bottom: 2px solid #C6D8CA; }
+            .footer { margin-top: 40px; text-align: center; border-top: 1px solid #C6D8CA; padding-top: 16px; font-size: 11px; color: #94A3B8; }
           </style>
         </head>
         <body>
           <div class="header">
             <div>
               <div class="brand">Akibora</div>
-              <div class="chama-subtitle">${chamaName} — Official Member Statement</div>
+              <div class="chama-subtitle">Member statement for ${esc(chamaName)}</div>
             </div>
             <div>
               <div class="report-title">Account Statement</div>
@@ -92,16 +94,16 @@ export async function generateMemberStatementPDF({
 
           <div class="meta-box">
             <div class="meta-item">
-              <div class="meta-label">Member Name</div>
-              <div class="meta-value">${memberName}</div>
+              <div class="meta-label">Member</div>
+              <div class="meta-value">${esc(memberName)}</div>
             </div>
             <div class="meta-item">
-              <div class="meta-label">Chama Group</div>
-              <div class="meta-value">${chamaName}</div>
+              <div class="meta-label">Group</div>
+              <div class="meta-value">${esc(chamaName)}</div>
             </div>
             <div class="meta-item" style="text-align: right;">
-              <div class="meta-label">Current Balance</div>
-              <div class="meta-value" style="color: #22C55E; font-family: monospace;">KSh ${totalBalance.toLocaleString('en-KE')}</div>
+              <div class="meta-label">Group wallet</div>
+              <div class="meta-value" style="color: #1F6B4A; font-family: monospace;">KSh ${totalBalance.toLocaleString('en-KE')}</div>
             </div>
           </div>
 
@@ -121,7 +123,7 @@ export async function generateMemberStatementPDF({
           </table>
 
           <div class="footer">
-            Akibora Financial Systems • Bank-grade encrypted statement • Certified by Group Officers
+            Made with Akibora on ${formattedDate}. This statement lists records kept by your group. It is not a bank statement.
           </div>
         </body>
       </html>
@@ -138,7 +140,7 @@ export async function generateMemberStatementPDF({
       await Sharing.shareAsync(uri, {
         UTI: 'com.adobe.pdf',
         mimeType: 'application/pdf',
-        dialogTitle: `${chamaName}_Statement.pdf`,
+        dialogTitle: `${chamaName} statement.pdf`,
       });
     } else {
       Alert.alert('Statement Ready', `PDF generated successfully at: ${uri}`);

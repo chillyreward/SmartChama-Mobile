@@ -1,101 +1,122 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import { EmptyState } from '../components/EmptyState';
+import { api, ApiError } from '../lib/api';
+import { Avatar, Button, Chip, Empty, Loading, Notice, Panel, Ring, Row, Screen, SectionTitle, T, Ticks, formatKsh, initialsOf, shortDate, type Seat } from '../ui';
+
+type Status = { cycle: any | null; schedule: any[]; contributions: any[] };
 
 export const MerryGoRoundScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { colors, isDark } = useTheme();
+  const { member, group } = useAuth();
+  const { colors } = useTheme();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'danger'; text: string } | null>(null);
 
-  const scheduleItems = [
-    { position: 1, name: 'Wanjiku N.', status: 'Received (Jun 15)', isMe: false },
-    { position: 2, name: 'You (Mary W.)', status: 'Next Recipient (Jul 15)', isMe: true },
-    { position: 3, name: 'Peter M.', status: 'Scheduled (Aug 15)', isMe: false },
-    { position: 4, name: 'Sarah K.', status: 'Scheduled (Sep 15)', isMe: false },
-  ];
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['mgr', group?.id],
+    enabled: !!group?.id,
+    queryFn: () => api<Status & { success: boolean }>(`/api/merry-go-round/status?chama_id=${group!.id}`, { method: 'GET' }),
+  });
+
+  const cycle = data?.cycle;
+  const schedule = data?.schedule ?? [];
+  const contributions = data?.contributions ?? [];
+  const nameOf = (s: any) => s?.chama_memberships?.profiles?.full_name || 'Member';
+  const current = schedule.find((s) => s.round_number === cycle?.current_round);
+  const mine = schedule.find((s) => s.recipient_membership_id === member?.id);
+  const paid = contributions.some((c) => c.membership_id === member?.id);
+  const pot = cycle ? Number(cycle.amount_per_member) * schedule.length : 0;
+  const seats: Seat[] = schedule.map((s) => ({
+    initials: initialsOf(nameOf(s)),
+    state: s.round_number === cycle?.current_round ? 'current' : s.status === 'paid' ? 'received' : s.recipient_membership_id === member?.id ? 'me' : 'upcoming',
+  }));
+
+  const pay = async () => {
+    if (!cycle || !member) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await api('/api/merry-go-round/contribute', {
+        body: { cycle_id: cycle.id, round_number: cycle.current_round, membership_id: member.id, amount: cycle.amount_per_member },
+      });
+      setMsg({ tone: 'ok', text: `${formatKsh(cycle.amount_per_member)} recorded for round ${cycle.current_round}.` });
+      refetch();
+    } catch (e) {
+      setMsg({ tone: 'danger', text: e instanceof ApiError ? e.message : 'Could not record your payment.' });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Merry-Go-Round</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Tutorial Banner */}
-        <View style={[styles.tutorialCard, { backgroundColor: isDark ? '#064E3B' : '#ECFDF5', borderColor: isDark ? '#065F46' : '#A7F3D0' }]}>
-          <View style={styles.tutorialHeader}>
-            <Ionicons name="refresh-circle-outline" size={22} color={colors.primary} />
-            <Text style={[styles.tutorialTitle, { color: isDark ? '#A7F3D0' : '#065F46' }]}>
-              How Merry-Go-Round Works
-            </Text>
-          </View>
-          <Text style={[styles.tutorialText, { color: isDark ? '#D1FAE5' : '#047857' }]}>
-            Merry-Go-Round (Table Banking) automatically rotates monthly group savings payouts. Every cycle, members contribute fixed funds and one recipient takes home the full pot.
-          </Text>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardSub, { color: colors.textSecondary }]}>CURRENT CYCLE POT</Text>
-          <Text style={[styles.cardAmount, { color: colors.primary }]}>KSh 25,000</Text>
-          <Text style={[styles.cardText, { color: colors.textSecondary }]}>
-            Payout Date: <Text style={{ fontWeight: 'bold', color: colors.text }}>July 15, 2026</Text>
-          </Text>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Rotation Schedule</Text>
-
-        {scheduleItems.length === 0 ? (
-          <EmptyState
-            icon="sync-outline"
-            title="No Active Rotation"
-            description="Your Chama group administrator has not set up a Merry-Go-Round rotation schedule yet."
-          />
-        ) : (
-          scheduleItems.map((item) => (
-            <View
-              key={item.position}
-              style={[
-                styles.row,
-                { backgroundColor: item.isMe ? (isDark ? '#052E16' : '#DCFCE7') : colors.card, borderColor: item.isMe ? colors.primary : colors.border }
-              ]}
-            >
-              <View style={[styles.numBox, { backgroundColor: item.isMe ? colors.primary : (isDark ? '#374151' : '#E2E8F0') }]}>
-                <Text style={{ color: item.isMe ? '#FFFFFF' : colors.text, fontWeight: 'bold' }}>#{item.position}</Text>
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={[styles.name, { color: colors.text, fontWeight: item.isMe ? 'bold' : '600' }]}>{item.name}</Text>
-                <Text style={[styles.status, { color: item.isMe ? colors.primary : colors.textSecondary }]}>{item.status}</Text>
-              </View>
+    <Screen
+      title="Merry-go-round"
+      subtitle="Each round everyone pays in and one member takes the whole pot. Your officials set the order."
+      onBack={() => navigation.goBack()}
+      refreshing={isRefetching}
+      onRefresh={refetch}
+    >
+      {isLoading ? <Loading /> : !cycle || cycle.status !== 'active' ? (
+        <Panel>
+          <Empty icon="sync-outline" title="No round is running">
+            When your officials start a merry-go-round you&apos;ll see the order, your turn and the pot here.
+          </Empty>
+        </Panel>
+      ) : (
+        <>
+          {msg ? <View style={{ marginBottom: 12 }}><Notice tone={msg.tone}>{msg.text}</Notice></View> : null}
+          <Panel tone="forest" style={{ alignItems: 'center', padding: 22, borderRadius: 28 }}>
+            <T v="small" tone="onForest3">{cycle.name}</T>
+            <View style={{ marginTop: 14 }}>
+              <Ring size={272} seats={seats} label={`Round ${cycle.current_round} of ${cycle.total_rounds}`}>
+                <T v="caption" tone="onForest3">Round {cycle.current_round} of {cycle.total_rounds}</T>
+                <T v="display" tone="onForest" style={{ marginTop: 2 }}>{formatKsh(pot)}</T>
+                {current ? (
+                  <T v="caption" tone="onForest2" style={{ textAlign: 'center', marginTop: 2 }}>
+                    to {current.recipient_membership_id === member?.id ? 'you' : nameOf(current).split(' ')[0]}{current.scheduled_date ? `, ${shortDate(current.scheduled_date)}` : ''}
+                  </T>
+                ) : null}
+              </Ring>
             </View>
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
+            <View style={{ alignSelf: 'stretch', marginTop: 20 }}>
+              <Ticks total={schedule.length} done={contributions.length} onColor={colors.mint} offColor={colors.canopy} />
+              <T v="caption" tone="onForest2" style={{ marginTop: 8 }}>{contributions.length} of {schedule.length} have paid into this round</T>
+            </View>
+            <View style={{ alignSelf: 'stretch', marginTop: 16 }}>
+              {paid ? (
+                <Chip kind="paid" label={`You've paid round ${cycle.current_round}`} />
+              ) : (
+                <Button label={`Pay ${formatKsh(cycle.amount_per_member)} for this round`} variant="mint" size="lg" loading={busy} onPress={pay} />
+              )}
+            </View>
+          </Panel>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+            <Chip kind="info" label="Received" /><Chip kind="paid" label="This round" /><Chip kind="welfare" label="You" /><Chip kind="neutral" label="Waiting" />
+          </View>
+
+          <SectionTitle>The order</SectionTitle>
+          <Panel style={{ paddingVertical: 4 }}>
+            {schedule.map((s, i) => {
+              const isMe = s.recipient_membership_id === member?.id;
+              const isNow = s.round_number === cycle.current_round;
+              return (
+                <Row
+                  key={s.id ?? i}
+                  left={<Avatar name={nameOf(s)} size={38} tone={isNow ? 'mint' : isMe ? 'lavender' : 'sage'} />}
+                  title={`${s.round_number}. ${isMe ? 'You' : nameOf(s)}`}
+                  subtitle={s.scheduled_date ? shortDate(s.scheduled_date, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Date to be set'}
+                  right={<Chip kind={s.status === 'paid' ? 'info' : isNow ? 'paid' : 'neutral'} label={s.status === 'paid' ? 'Received' : isNow ? 'This round' : 'Waiting'} />}
+                  last={i === schedule.length - 1}
+                />
+              );
+            })}
+          </Panel>
+          {mine ? <T v="small" tone="ink2" style={{ marginTop: 12 }}>Your turn is round {mine.round_number}.</T> : null}
+        </>
+      )}
+    </Screen>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 16 },
-  tutorialCard: { padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 16 },
-  tutorialHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  tutorialTitle: { fontSize: 14, fontWeight: 'bold' },
-  tutorialText: { fontSize: 12, lineHeight: 18 },
-  card: { padding: 20, borderRadius: 18, borderWidth: 1, marginBottom: 20 },
-  cardSub: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
-  cardAmount: { fontSize: 28, fontWeight: 'bold', marginVertical: 6 },
-  cardText: { fontSize: 13 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
-  numBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  name: { fontSize: 14 },
-  status: { fontSize: 12, marginTop: 2 },
-});
-

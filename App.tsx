@@ -11,6 +11,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { OfflineBanner } from './src/components/OfflineBanner';
 import { AppLock } from './src/security/AppLock';
 import { initIntegrations, integrations } from './src/integrations';
+import { useAppFonts } from './src/theme/fonts';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -43,6 +44,12 @@ function MainApp() {
 }
 
 export default function App() {
+  // Hold the splash screen until the brand fonts are ready, so text never
+  // jumps from the system font to Onest and Newsreader. If a font fails to
+  // load, carry on with the system font rather than blocking the app.
+  const [fontsLoaded, fontError] = useAppFonts();
+  if (!fontsLoaded && !fontError) return null;
+
   return (
     <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <SafeAreaProvider>

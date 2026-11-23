@@ -1,94 +1,74 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-} from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import React, { useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { useQuery } from '@tanstack/react-query';
-
 import { GroupSwitcherModal } from '../components/GroupSwitcherModal';
+import { addDays, cycleStart, describeSchedule, nextDueDate, prettyDate, todayNairobi, type GroupSchedule } from '../lib/contributionSchedule';
+import { standing } from '../lib/trust';
+import { Button, Chip, IconButton, Loading, Meter, Money, Panel, Row, Screen, SectionTitle, T, Ticks, formatKsh, shortDate } from '../ui';
+
+const INCOMING = ['contribution', 'repayment', 'loan_repayment', 'penalty', 'interest', 'deposit', 'smartgrow_return'];
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+
+function daysBetween(a: string, b: string) {
+  return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+}
 
 export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { session, member, group, refreshAuth } = useAuth();
-  const { colors, isDark } = useTheme();
-
+  const { colors } = useTheme();
   const [switcherVisible, setSwitcherVisible] = useState(false);
-
-  const { data: dashboardData, isLoading, dataUpdatedAt, refetch } = useQuery({
-    queryKey: ['dashboardData', group?.id, member?.id],
-    queryFn: async () => {
-      if (!group?.id || !member?.id || !session?.user?.id) {
-        return {
-          walletBalance: 0,
-          myContributionsSum: 0,
-          unreadNotifications: 0,
-          recentTransactions: [],
-        };
-      }
-
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('balance')
-        .eq('chama_id', group.id)
-        .maybeSingle();
-
-      const { data: contribs } = await supabase
-        .from('contributions_v2')
-        .select('amount')
-        .eq('membership_id', member.id)
-        .eq('status', 'confirmed');
-
-      const sumContribs = contribs?.reduce((acc, c) => acc + Number(c.amount || 0), 0) || 0;
-
-      const { count: countNotifs } = await supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('profile_id', session.user.id)
-        .eq('read', false);
-
-      const { data: txs } = await supabase
-        .from('transactions_v2')
-        .select('*')
-        .eq('chama_id', group.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      return {
-        walletBalance: Number(wallet?.balance || 0),
-        myContributionsSum: sumContribs,
-        unreadNotifications: countNotifs || 0,
-        recentTransactions: txs || [],
-      };
-    },
-    enabled: !!group?.id && !!member?.id,
-  });
-
   const [refreshing, setRefreshing] = useState(false);
 
-  const walletBalance = dashboardData?.walletBalance || 0;
-  const myContributionsSum = dashboardData?.myContributionsSum || 0;
-  const unreadNotifications = dashboardData?.unreadNotifications || 0;
-  const recentTransactions = dashboardData?.recentTransactions || [];
-  const loading = isLoading;
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
-
-  const firstName = member?.profiles?.full_name?.split(' ')[0] || 'Member';
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['dashboard', group?.id, member?.id],
+    enabled: !!group?.id && !!member?.id,
+    queryFn: async () => {
+      const gid = group!.id;
+      const [mine, txs, wallet, welfare, unread, chama, dates, cycle] = await Promise.all([
+        supabase.from('contributions_v2').select('amount, created_at').eq('membership_id', member!.id).eq('status', 'confirmed').order('created_at'),
+        supabase.from('transactions_v2').select('id, type, amount, description, created_at').eq('chama_id', gid).order('created_at', { ascending: false }).limit(5),
+        supabase.from('wallets').select('balance, invested').eq('chama_id', gid).maybeSingle(),
+        supabase.from('welfare_fund').select('balance').eq('chama_id', gid).maybeSingle(),
+        supabase.from('notifications').select('id', { count: 'exact', head: true }).eq('profile_id', session!.user.id).eq('read', false),
+        supabase.from('chamas_v2').select('contribution_amount, contribution_frequency, contribution_due_day').eq('id', gid).maybeSingle(),
+        supabase.from('chama_contribution_dates').select('due_date').eq('chama_id', gid).order('due_date'),
+        supabase.from('merry_go_round_cycles').select('id, current_round, total_rounds').eq('chama_id', gid).eq('status', 'active').order('created_at', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      let myRound: { round_number: number; scheduled_date: string | null } | null = null;
+      if (cycle.data?.id) {
+        const { data: sched } = await supabase
+          .from('merry_go_round_schedule')
+          .select('round_number, scheduled_date')
+          .eq('cycle_id', cycle.data.id)
+          .eq('recipient_membership_id', member!.id)
+          .maybeSingle();
+        myRound = sched ?? null;
+      }
+      return {
+        mine: (mine.data ?? []) as { amount: number; created_at: string }[],
+        txs: (txs.data ?? []) as any[],
+        wallet: wallet.data as { balance: number; invested: number } | null,
+        welfare: welfare.data ? Number(welfare.data.balance) : null,
+        unread: unread.count ?? 0,
+        amount: Number(chama.data?.contribution_amount ?? group?.contribution_amount ?? 0),
+        schedule: {
+          frequency: chama.data?.contribution_frequency,
+          dates: (dates.data ?? []).map((d: any) => d.due_date),
+          dueDay: chama.data?.contribution_due_day,
+        } as GroupSchedule,
+        cycle: cycle.data as { current_round: number; total_rounds: number } | null,
+        myRound,
+      };
+    },
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -97,460 +77,144 @@ export const DashboardScreen: React.FC<{ navigation: any }> = ({ navigation }) =
     setRefreshing(false);
   };
 
-  const getTimeAgo = () => {
-    if (!dataUpdatedAt) return null;
-    const diffMinutes = Math.floor((Date.now() - dataUpdatedAt) / (1000 * 60));
-    if (diffMinutes < 1) return 'Just now';
-    return `${diffMinutes} min ago`;
-  };
+  // Last six months of my confirmed contributions
+  const months = useMemo(() => {
+    const now = new Date();
+    const out = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+      return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('en-KE', { month: 'short' }), total: 0 };
+    });
+    (data?.mine ?? []).forEach((c) => {
+      const d = new Date(c.created_at);
+      const m = out.find((x) => x.key === `${d.getFullYear()}-${d.getMonth()}`);
+      if (m) m.total += Number(c.amount || 0);
+    });
+    return out;
+  }, [data?.mine]);
 
-  const formatCurrency = (val: number) =>
-    val.toLocaleString('en-KE', { maximumFractionDigits: 0 });
+  const firstName = member?.profiles?.full_name?.split(' ')[0] || '';
+  const totalSaved = (data?.mine ?? []).reduce((s, c) => s + Number(c.amount || 0), 0);
+  const maxMonth = Math.max(1, ...months.map((m) => m.total));
+  const thisMonth = months[months.length - 1]?.total ?? 0;
+  const score = Number(member?.trust_score ?? 0);
 
-  // Target yearly contribution goal
-  const targetGoal = 50000;
-  const progressPercent = Math.min(100, Math.round((myContributionsSum / targetGoal) * 100));
-
-  if (loading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={styles.skeletonContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading Dashboard...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const today = todayNairobi();
+  const due = data ? nextDueDate(data.schedule, today) : null;
+  const start = due && data ? cycleStart(data.schedule, due) : null;
+  const span = due && start ? Math.max(1, daysBetween(start, due) + 1) : 0;
+  const elapsed = due && start ? Math.min(span, Math.max(0, daysBetween(start, today) + 1)) : 0;
+  const whenText = !due ? 'No upcoming date set' : due === today ? 'Due today' : due === addDays(today, 1) ? 'Due tomorrow' : `Due ${prettyDate(due)}`;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <GroupSwitcherModal
-        visible={switcherVisible}
-        onClose={() => setSwitcherVisible(false)}
-      />
+    <Screen tabBarSpace refreshing={refreshing} onRefresh={onRefresh}>
+      <GroupSwitcherModal visible={switcherVisible} onClose={() => setSwitcherVisible(false)} />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
-        }
-      >
-        {/* Section 1: Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-              {getGreeting()}, {firstName} 👋
-            </Text>
-            <TouchableOpacity
-              onPress={() => setSwitcherVisible(true)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.chamaSubtitle, { color: colors.text, fontWeight: 'bold' }]}>
-                {group?.name || 'My Chama'}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color={colors.primary} />
-            </TouchableOpacity>
-            {getTimeAgo() && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
-                <Text style={{ fontSize: 11, color: colors.textSecondary }}>Last updated {getTimeAgo()}</Text>
-              </View>
-            )}
-          </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 8, paddingBottom: 18 }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <T v="small" tone="ink2">{greeting()}{firstName ? `, ${firstName}` : ''}</T>
+          <Pressable onPress={() => setSwitcherVisible(true)} accessibilityRole="button" accessibilityLabel="Switch group" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <T v="title" numberOfLines={1} style={{ flexShrink: 1 }}>{group?.name || 'Your group'}</T>
+            <Ionicons name="chevron-down" size={16} color={colors.ink2} />
+          </Pressable>
+        </View>
+        <IconButton icon="notifications-outline" label="Notifications" badge={data?.unread} onPress={() => navigation.navigate('Alerts')} />
+      </View>
 
-          <TouchableOpacity style={[styles.bellButton, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => navigation.navigate('Alerts')}>
-            <Ionicons name="notifications-outline" size={22} color={colors.text} />
-            {unreadNotifications > 0 ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {unreadNotifications > 9 ? '9+' : unreadNotifications}
-                </Text>
+      {isLoading || !data ? <Loading /> : (
+        <>
+          {/* Savings hero */}
+          <Panel tone="forest" style={{ padding: 22, borderRadius: 28 }}>
+            <T v="small" tone="onForest3">Your savings in this group</T>
+            <Money value={totalSaved} v="moneyLg" tone="mint" style={{ marginTop: 4 }} />
+            <T v="small" tone="onForest2" style={{ marginTop: 2 }}>
+              {thisMonth > 0 ? `${formatKsh(thisMonth)} paid this month` : 'Nothing paid yet this month'}
+            </T>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 96, marginTop: 20 }} accessibilityLabel="Your contributions over the last six months">
+              {months.map((m, i) => (
+                <View key={m.key} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: '100%', height: Math.max(4, (m.total / maxMonth) * 70), borderRadius: 6, backgroundColor: i === months.length - 1 ? colors.mint : m.total > 0 ? colors.moss : colors.canopy }} />
+                  <T v="caption" tone="onForest3">{m.label}</T>
+                </View>
+              ))}
+            </View>
+          </Panel>
+
+          {/* Next contribution */}
+          <Panel tone="sage" style={{ marginTop: 12, padding: 22, borderRadius: 28 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <T v="small" tone="sageInk">Next contribution</T>
+              {due && daysBetween(today, due) > 1 ? <T v="caption" tone="sageInk">in {daysBetween(today, due)} days</T> : null}
+            </View>
+            {data.amount > 0 ? <Money value={data.amount} v="moneyLg" tone="sageInk" style={{ marginTop: 2 }} /> : null}
+            <T v="bodyStrong" tone="sageInk">{whenText}</T>
+            <T v="caption" tone="sageInk" style={{ opacity: 0.75, marginTop: 2 }}>{describeSchedule(data.schedule)}</T>
+            {span > 1 ? (
+              <View style={{ marginTop: 16 }}>
+                <Meter value={elapsed} max={span} segments={Math.min(span, 30)} height={18} onColor={colors.moss} offColor="#A9C3B0" />
+                <T v="caption" tone="sageInk" style={{ marginTop: 8 }}>{span - elapsed} of {span} days left in this cycle</T>
               </View>
             ) : null}
-          </TouchableOpacity>
-        </View>
+            <Button label="Pay with M-Pesa" variant="forest" size="lg" icon="phone-portrait-outline" style={{ marginTop: 18 }} onPress={() => navigation.navigate('Contribute', { pay: Date.now() })} />
+          </Panel>
 
-        {/* Section 2: Balance Hero Card */}
-        <View style={[styles.balanceCard, { backgroundColor: isDark ? '#0F172A' : '#1E293B' }]}>
-          <Text style={styles.balanceLabel}>TOTAL CHAMA BALANCE</Text>
-          <Text style={styles.balanceAmount}>KES {formatCurrency(walletBalance)}</Text>
-          <View style={styles.balanceFooter}>
-            <View style={styles.shieldRow}>
-              <Ionicons name="shield-checkmark" size={14} color="#22C55E" />
-              <Text style={styles.balanceSubtext}>Vault Encrypted Wallet</Text>
-            </View>
-            <Text style={styles.balanceSubtext}>Role: {member?.role || 'Member'}</Text>
-          </View>
-        </View>
-
-        {/* Section 3: Circular Contribution Progress Card */}
-        <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.progressInfo}>
-            <Text style={[styles.progressTitle, { color: colors.textSecondary }]}>ANNUAL SAVINGS GOAL</Text>
-            <Text style={[styles.progressAmount, { color: colors.text }]}>KES {formatCurrency(myContributionsSum)}</Text>
-            <Text style={[styles.progressSub, { color: colors.textSecondary }]}>Goal: KES {formatCurrency(targetGoal)}</Text>
-          </View>
-
-          <View style={styles.svgWrapper}>
-            <Svg width="72" height="72" viewBox="0 0 100 100">
-              <Circle cx="50" cy="50" r="40" stroke={isDark ? '#334155' : '#E2E8F0'} strokeWidth="10" fill="none" />
-              <Circle
-                cx="50"
-                cy="50"
-                r="40"
-                stroke={colors.primary}
-                strokeWidth="10"
-                fill="none"
-                strokeDasharray={`${251 * (progressPercent / 100)} 251`}
-                strokeLinecap="round"
-                transform="rotate(-90 50 50)"
-              />
-            </Svg>
-            <Text style={[styles.percentText, { color: colors.primary }]}>{progressPercent}%</Text>
-          </View>
-        </View>
-
-        {/* Section 4: Quick Actions Row */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Quick Actions</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickActionsRow}>
-          <TouchableOpacity
-            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('Contribute')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="card" size={22} color="#16A34A" />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Contribute</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('MerryGoRound')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#FEF3C7' }]}>
-              <Ionicons name="sync" size={22} color="#D97706" />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Merry-Go-Round</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('Wallet')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#E0F2FE' }]}>
-              <Ionicons name="send" size={22} color="#0284C7" />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Send Money</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('Wallet')}
-          >
-            <View style={[styles.actionIcon, { backgroundColor: '#F3E8FF' }]}>
-              <Ionicons name="document-text" size={22} color="#9333EA" />
-            </View>
-            <Text style={[styles.actionLabel, { color: colors.text }]}>Statement</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
-        {/* Section 5: Overview Metric Strip */}
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.metricStrip}>
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons name="wallet-outline" size={20} color={colors.primary} />
-            <Text style={[styles.statCardTitle, { color: colors.textSecondary }]}>MY SAVINGS</Text>
-            <Text style={[styles.statCardValue, { color: colors.text }]}>KES {formatCurrency(myContributionsSum)}</Text>
-            <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>Confirmed Payments</Text>
+          {/* Trust + merry-go-round */}
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+            <Panel style={{ flex: 1 }} onPress={() => navigation.navigate('TrustScore')} accessibilityLabel={`Trust score ${score} out of 100`}>
+              <T v="caption" tone="ink2">Trust score</T>
+              <T v="display" style={{ marginTop: 6 }}>{score}<T v="small" tone="ink3"> /100</T></T>
+              <View style={{ marginTop: 10 }}><Meter value={score} segments={14} height={14} /></View>
+              <T v="caption" tone="ink2" style={{ marginTop: 8 }}>{standing(score).label}</T>
+            </Panel>
+            <Panel tone="lavender" style={{ flex: 1 }} onPress={() => navigation.navigate('MerryGoRound')} accessibilityLabel="Merry-go-round">
+              <T v="caption" style={{ color: colors.lavenderInk }}>Merry-go-round</T>
+              {data.cycle ? (
+                <>
+                  <T v="display" style={{ marginTop: 6, color: colors.lavenderInk }}>{data.cycle.current_round}<T v="small" style={{ color: colors.lavenderInk }}> of {data.cycle.total_rounds}</T></T>
+                  <View style={{ marginTop: 10 }}><Ticks total={data.cycle.total_rounds} done={data.cycle.current_round} onColor={colors.lavenderInk} offColor="#A99BE0" /></View>
+                  <T v="caption" style={{ marginTop: 8, color: colors.lavenderInk }}>
+                    {data.myRound ? `Your turn: round ${data.myRound.round_number}${data.myRound.scheduled_date ? `, ${shortDate(data.myRound.scheduled_date)}` : ''}` : 'Not in this round'}
+                  </T>
+                </>
+              ) : (
+                <T v="small" style={{ marginTop: 6, color: colors.lavenderInk }}>No round is running right now.</T>
+              )}
+            </Panel>
           </View>
 
-          <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons name="star-outline" size={20} color={colors.primary} />
-            <Text style={[styles.statCardTitle, { color: colors.textSecondary }]}>TRUST SCORE</Text>
-            <Text style={[styles.statCardValue, { color: colors.primary }]}>
-              {member?.trust_score || 100} / 100
-            </Text>
-            <Text style={[styles.statCardSub, { color: colors.textSecondary }]}>High Credibility</Text>
-          </View>
-        </ScrollView>
+          {/* Group money */}
+          <SectionTitle action="Wallet" onAction={() => navigation.navigate('Wallet')}>The group&apos;s money</SectionTitle>
+          <Panel style={{ paddingVertical: 4 }}>
+            <Row icon="wallet-outline" title="In the group wallet" right={<Money value={data.wallet?.balance ?? 0} />} />
+            <Row icon="trending-up-outline" title="Invested through SmartGrow" right={<Money value={data.wallet?.invested ?? 0} />} onPress={() => navigation.navigate('SmartGrow')} />
+            <Row icon="heart-outline" iconTone="lavender" title="Welfare fund" right={<Money value={data.welfare ?? 0} />} onPress={() => navigation.navigate('Welfare')} last />
+          </Panel>
 
-        {/* Section 6: Recent Transactions */}
-        <View style={styles.txHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Transactions</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('History')}>
-            <Text style={[styles.viewAllText, { color: colors.primary }]}>View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        {recentTransactions.length === 0 ? (
-          <View style={[styles.emptyTxBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons name="receipt-outline" size={36} color={colors.textSecondary} />
-            <Text style={[styles.emptyTxText, { color: colors.textSecondary }]}>No recent group transactions found</Text>
-          </View>
-        ) : (
-          recentTransactions.map((tx) => (
-            <View key={tx.id} style={[styles.txRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View
-                style={[
-                  styles.txIconBox,
-                  { backgroundColor: tx.type === 'contribution' ? '#DCFCE7' : '#FEE2E2' },
-                ]}
-              >
-                <Ionicons
-                  name={tx.type === 'contribution' ? 'arrow-down' : 'arrow-up'}
-                  size={18}
-                  color={tx.type === 'contribution' ? '#16A34A' : '#DC2626'}
+          {/* Activity */}
+          <SectionTitle action="See all" onAction={() => navigation.navigate('History')}>Recent activity</SectionTitle>
+          <Panel style={{ paddingVertical: 4 }}>
+            {data.txs.length === 0 ? (
+              <T v="small" tone="ink2" style={{ paddingVertical: 16 }}>Nothing yet. Payments, payouts and withdrawals show here as they happen.</T>
+            ) : data.txs.map((tx, i) => {
+              const inflow = INCOMING.includes(tx.type);
+              return (
+                <Row
+                  key={tx.id}
+                  icon={inflow ? 'arrow-down' : 'arrow-up'}
+                  iconTone={inflow ? 'mint' : 'raised'}
+                  title={tx.description || (tx.type === 'contribution' ? 'Contribution' : String(tx.type).replace(/_/g, ' '))}
+                  subtitle={shortDate(tx.created_at, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                  right={<T v="money" tone={inflow ? 'brand' : 'ink'}>{inflow ? '+' : '−'}{formatKsh(Math.abs(Number(tx.amount)))}</T>}
+                  last={i === data.txs.length - 1}
                 />
-              </View>
-              <View style={styles.txInfo}>
-                <Text style={[styles.txTitle, { color: colors.text }]}>
-                  {tx.description || (tx.type === 'contribution' ? 'Member Contribution' : 'Group Transaction')}
-                </Text>
-                <Text style={[styles.txDate, { color: colors.textSecondary }]}>
-                  {new Date(tx.created_at).toLocaleDateString('en-KE', { month: 'short', day: 'numeric' })}
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.txAmount,
-                  { color: tx.type === 'contribution' ? '#16A34A' : colors.text },
-                ]}
-              >
-                {tx.type === 'contribution' ? '+' : '-'}KES {formatCurrency(Number(tx.amount))}
-              </Text>
-            </View>
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
+              );
+            })}
+          </Panel>
+
+          {member?.status === 'active' && score === 0 ? (
+            <View style={{ marginTop: 16 }}><Chip kind="info" label="Your trust score starts once your first payment is confirmed" /></View>
+          ) : null}
+        </>
+      )}
+    </Screen>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-  },
-  skeletonContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: 'bold',
-  },
-  chamaSubtitle: {
-    fontSize: 13,
-    marginTop: 2,
-  },
-  bellButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#EF4444',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  badgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  balanceCard: {
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-  },
-  balanceLabel: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
-  balanceAmount: {
-    color: '#FFFFFF',
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginVertical: 6,
-  },
-  balanceFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  shieldRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  balanceSubtext: {
-    color: '#CBD5E1',
-    fontSize: 11,
-  },
-  progressCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 18,
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: 16,
-  },
-  progressInfo: {
-    flex: 1,
-  },
-  progressTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  progressAmount: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginVertical: 4,
-  },
-  progressSub: {
-    fontSize: 12,
-  },
-  svgWrapper: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  percentText: {
-    position: 'absolute',
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  quickActionsRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  actionItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 86,
-    height: 86,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginRight: 10,
-  },
-  actionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  actionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  metricStrip: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  statCard: {
-    width: 140,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    marginRight: 10,
-  },
-  statCardTitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-    marginTop: 8,
-  },
-  statCardValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginVertical: 4,
-  },
-  statCardSub: {
-    fontSize: 10,
-  },
-  txHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  viewAllText: {
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  txRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-  },
-  txIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  txInfo: {
-    flex: 1,
-  },
-  txTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-  },
-  txDate: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  txAmount: {
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  emptyTxBox: {
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-  },
-  emptyTxText: {
-    fontSize: 13,
-    marginTop: 8,
-  },
-});

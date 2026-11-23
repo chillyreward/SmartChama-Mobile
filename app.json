@@ -18,7 +18,7 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
-        "backgroundColor": "#22C55E"
+        "backgroundColor": "#0E1F18"
       },
       "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
@@ -62,7 +62,7 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#22C55E"
+          "backgroundColor": "#0E1F18"
         }
       ],
       "expo-sharing",

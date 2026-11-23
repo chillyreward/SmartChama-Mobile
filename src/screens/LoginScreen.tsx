@@ -1,17 +1,9 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../contexts/ThemeContext';
+import { Button, Field, Notice, Segmented, T } from '../ui';
 import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 import * as Linking from 'expo-linking';
@@ -20,12 +12,14 @@ import { endpoints } from '../lib/api';
 import { env } from '../config/env';
 import { features } from '../config/features';
 import { useEnabledSocialProviders, SocialProvider } from '../lib/authProviders';
-import { colors } from '../theme/colors';
 
 // Required: warm up the browser on Android for a faster OAuth open
 WebBrowser.maybeCompleteAuthSession();
 
-export const LoginScreen: React.FC = () => {
+export const LoginScreen: React.FC<{ route?: any; navigation?: any }> = ({ route, navigation }) => {
+  const { colors } = useTheme();
+  const isSignup = route?.params?.mode === 'signup';
+  const [info, setInfo] = useState('');
   const [loginMode, setLoginMode] = useState<'phone' | 'email'>('phone');
   
   // Phone OTP State
@@ -61,7 +55,7 @@ export const LoginScreen: React.FC = () => {
     try {
       await endpoints.sendOtp(formatPhone(phoneNumber));
       setStep('otp');
-      Alert.alert('Code sent', 'Check your SMS for the 6-digit verification code.');
+      setInfo(`We sent a 6-digit code to ${phoneNumber}. It can take a minute.`);
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not send the code.');
     } finally {
@@ -183,466 +177,106 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Top Header Banner */}
-        <View style={styles.header}>
-          <Text style={styles.logoText}>Akibora</Text>
-          <Text style={styles.headerSubtitle}>Kenyan Chama Group Savings</Text>
-        </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.page }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 40, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+          <T v="title" style={{ marginTop: 4 }}>Akibora</T>
 
-        {/* Auth Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Welcome Back</Text>
-          <Text style={styles.cardSubtitle}>
-            {loginMode === 'phone'
-              ? 'Members sign in with registered M-Pesa number'
-              : 'Chama Admins sign in with email credentials'}
-          </Text>
+          <T v="hero" style={{ marginTop: 36 }}>{isSignup ? 'Join your group' : 'Welcome back'}</T>
+          <T v="body" tone="ink2" style={{ marginTop: 10 }}>
+            {isSignup
+              ? 'Create your account with Google or Apple, then type the group code your chair or treasurer shared.'
+              : loginMode === 'phone'
+                ? 'Sign in with the phone number on your account. We will text you a code.'
+                : 'Sign in with your email and password.'}
+          </T>
 
-          {/* Mode Switcher */}
-          <View style={styles.modeTabs}>
-            <TouchableOpacity
-              style={[styles.tab, loginMode === 'phone' && styles.tabActive]}
-              onPress={() => setLoginMode('phone')}
-            >
-              <Text style={[styles.tabText, loginMode === 'phone' && styles.tabTextActive]}>
-                📱 Phone OTP
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, loginMode === 'email' && styles.tabActive]}
-              onPress={() => setLoginMode('email')}
-            >
-              <Text style={[styles.tabText, loginMode === 'email' && styles.tabTextActive]}>
-                🔑 Admin Sign In
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {loginMode === 'phone' ? (
-            step === 'phone' ? (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Phone Number</Text>
-                <View style={styles.phoneInputContainer}>
-                  <Text style={styles.prefix}>+254</Text>
-                  <TextInput
-                    style={styles.phoneInput}
-                    placeholder="712345678"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="phone-pad"
-                    value={phoneNumber}
-                    onChangeText={setPhoneNumber}
-                  />
-                </View>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleSendOTP}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Send OTP Code</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Enter 6-Digit OTP Code</Text>
-                <TextInput
-                  style={styles.otpInput}
-                  placeholder="123456"
-                  placeholderTextColor="#9CA3AF"
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={otpCode}
-                  onChangeText={setOtpCode}
-                />
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={handleVerifyOTP}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#FFFFFF" />
-                  ) : (
-                    <Text style={styles.primaryButtonText}>Verify & Sign In</Text>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryLink}
-                  onPress={() => setStep('phone')}
-                >
-                  <Text style={styles.secondaryLinkText}>Change Phone Number</Text>
-                </TouchableOpacity>
-              </View>
-            )
-          ) : (
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>Email Address</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="you@example.com"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-              />
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter password"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-              />
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={handleEmailLogin}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Sign In</Text>
-                )}
-              </TouchableOpacity>
+          {isSignup ? (
+            <View style={{ marginTop: 24, gap: 10 }}>
+              {socialButtons()}
+              <Button label="Sign up with my phone number" variant="ghost" icon="open-outline" onPress={() => WebBrowser.openBrowserAsync(`${env.apiBaseUrl}/signup?role=member`).catch(() => {})} />
+              <T v="caption" tone="ink3" style={{ textAlign: 'center' }}>Phone sign-up opens on the Akibora website. Come back here to sign in afterwards.</T>
             </View>
-          )}
+          ) : null}
 
-          {/* Google Sign-In Divider + Button */}
-          {enabledSocial.length > 0 && (<>
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {enabledSocial.includes('google') && (
-          <TouchableOpacity
-            style={styles.googleButton}
-            onPress={() => handleOAuthSignIn('google')}
-            disabled={loading}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-          >
-            {loading ? (
-              <ActivityIndicator color="#374151" />
-            ) : (
-              <>
-                <Ionicons name="logo-google" size={20} color="#EA4335" style={styles.googleIcon} />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          )}
-
-          {enabledSocial.includes('apple') && (
-          <TouchableOpacity
-            style={[styles.googleButton, styles.appleButton]}
-            onPress={() => handleOAuthSignIn('apple')}
-            disabled={loading}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.googleIcon} />
-                <Text style={[styles.googleButtonText, { color: '#FFFFFF' }]}>Continue with Apple</Text>
-              </>
-            )}
-          </TouchableOpacity>
-          )}
-          </>)}
-
-          {/* Demo accounts: development builds only */}
-          {features.demoLogin && demoAccounts.length > 0 && (
-          <View style={styles.demoDrawerContainer}>
-            <TouchableOpacity
-              style={styles.demoAccordionHeader}
-              onPress={() => setShowDemoDrawer(!showDemoDrawer)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.demoHeaderLeft}>
-                <Ionicons name="flash-outline" size={16} color="#16A34A" />
-                <Text style={styles.demoAccordionTitle}>Quick Demo Access (Testers)</Text>
-              </View>
-              <Ionicons
-                name={showDemoDrawer ? 'chevron-up' : 'chevron-down'}
-                size={18}
-                color="#6B7280"
+          {!isSignup ? (
+            <View style={{ marginTop: 24 }}>
+              <Segmented
+                value={loginMode}
+                onChange={(m) => { setLoginMode(m); setInfo(''); }}
+                items={[{ value: 'phone', label: 'Phone' }, { value: 'email', label: 'Email' }]}
               />
-            </TouchableOpacity>
-
-            {showDemoDrawer && (
-              <View style={styles.demoGrid}>
-                {demoAccounts.map((a) => (
-                  <TouchableOpacity
-                    key={a.label}
-                    style={styles.demoButton}
-                    onPress={() => handleDemoFill(a.email, a.password)}
-                  >
-                    <Text style={styles.demoBtnText}>{a.label}</Text>
-                  </TouchableOpacity>
-                ))}
+              <View style={{ gap: 16, marginTop: 20 }}>
+                {loginMode === 'phone' ? (
+                  step === 'phone' ? (
+                    <>
+                      <Field label="Phone number" placeholder="0712 345 678" keyboardType="phone-pad" autoComplete="tel" value={phoneNumber} onChangeText={setPhoneNumber} />
+                      <Button label="Text me a code" size="lg" loading={loading} onPress={handleSendOTP} />
+                    </>
+                  ) : (
+                    <>
+                      {info ? <Notice tone="ok">{info}</Notice> : null}
+                      <Field label="6-digit code" placeholder="123456" keyboardType="number-pad" maxLength={6} autoComplete="sms-otp" textContentType="oneTimeCode" value={otpCode} onChangeText={setOtpCode} />
+                      <Button label="Sign in" size="lg" loading={loading} onPress={handleVerifyOTP} />
+                      <Button label="Use a different number" variant="ghost" onPress={() => { setStep('phone'); setOtpCode(''); setInfo(''); }} />
+                    </>
+                  )
+                ) : (
+                  <>
+                    <Field label="Email" placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" autoComplete="email" value={email} onChangeText={setEmail} />
+                    <Field label="Password" secureTextEntry autoComplete="password" value={password} onChangeText={setPassword} />
+                    <Button label="Sign in" size="lg" loading={loading} onPress={handleEmailLogin} />
+                  </>
+                )}
               </View>
-            )}
-          </View>
-          )}
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
-  );
-};
+            </View>
+          ) : null}
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background.light,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: colors.primary,
-    letterSpacing: -0.5,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-    marginTop: 4,
-  },
-  card: {
-    backgroundColor: colors.card.light,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  cardTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text.light,
-    textAlign: 'center',
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary.light,
-    textAlign: 'center',
-    marginBottom: 20,
-    marginTop: 4,
-  },
-  modeTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary.light,
-  },
-  tabTextActive: {
-    color: colors.primary,
-  },
-  formGroup: {
-    gap: 12,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    color: colors.textSecondary.light,
-    letterSpacing: 0.5,
-  },
-  phoneInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 14,
-    height: 52,
-  },
-  prefix: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: colors.text.light,
-    marginRight: 8,
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.text.light,
-  },
-  otpInput: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 14,
-    height: 56,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    letterSpacing: 8,
-    color: colors.text.light,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 14,
-    height: 52,
-    fontSize: 16,
-    color: colors.text.light,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 8,
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  secondaryLink: {
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  secondaryLinkText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  demoDrawerContainer: {
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.light,
-  },
-  demoAccordionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  demoHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  demoAccordionTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#15803D',
-  },
-  demoGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 12,
-  },
-  demoButton: {
-    flex: 1,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#BBF7D0',
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  demoBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#166534',
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 4,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border.light,
-  },
-  dividerText: {
-    marginHorizontal: 10,
-    fontSize: 12,
-    color: colors.textSecondary.light,
-    fontWeight: '500',
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderRadius: 12,
-    height: 52,
-    marginTop: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  appleButton: {
-    backgroundColor: '#000000',
-    borderColor: '#000000',
-  },
-  googleIcon: {
-    marginRight: 10,
-  },
-  googleButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#374151',
-  },
-});
+          {!isSignup && enabledSocial.length > 0 ? (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 22 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+                <T v="caption" tone="ink3">or</T>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.line }} />
+              </View>
+              <View style={{ gap: 10 }}>{socialButtons()}</View>
+            </>
+          ) : null}
+
+          {features.demoLogin && demoAccounts.length > 0 ? (
+            <View style={{ marginTop: 24, gap: 8 }}>
+              <Pressable onPress={() => setShowDemoDrawer(!showDemoDrawer)} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <T v="smallStrong" tone="ink2">Development accounts</T>
+                <Ionicons name={showDemoDrawer ? 'chevron-up' : 'chevron-down'} size={18} color={colors.ink3} />
+              </Pressable>
+              {showDemoDrawer ? demoAccounts.map((a) => (
+                <Button key={a.label} label={a.label} variant="outline" size="sm" onPress={() => handleDemoFill(a.email, a.password)} />
+              )) : null}
+            </View>
+          ) : null}
+
+          <View style={{ flex: 1, minHeight: 24 }} />
+          <Pressable onPress={() => navigation?.setParams({ mode: isSignup ? 'login' : 'signup' })} accessibilityRole="button" style={{ alignItems: 'center', paddingVertical: 10 }}>
+            <T v="small" tone="ink2">
+              {isSignup ? 'Already have an account? ' : 'New to Akibora? '}
+              <T v="smallStrong" tone="brand">{isSignup ? 'Sign in' : 'Join your group'}</T>
+            </T>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+
+  function socialButtons() {
+    return (
+      <>
+        {enabledSocial.includes('google') ? (
+          <Button label="Continue with Google" variant="outline" size="lg" icon="logo-google" disabled={loading} onPress={() => handleOAuthSignIn('google')} />
+        ) : null}
+        {enabledSocial.includes('apple') ? (
+          <Button label="Continue with Apple" variant="primary" size="lg" icon="logo-apple" disabled={loading} onPress={() => handleOAuthSignIn('apple')} />
+        ) : null}
+      </>
+    );
+  }
+};

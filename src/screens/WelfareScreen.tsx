@@ -1,100 +1,115 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
-import { EmptyState } from '../components/EmptyState';
+import { api, ApiError } from '../lib/api';
+import { Button, Chip, Empty, Field, Loading, Money, Notice, Panel, Row, Screen, SectionTitle, Choices, T, formatKsh, shortDate, type ChipKind } from '../ui';
 
-export const WelfareScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { colors, isDark } = useTheme();
+const REASONS = [
+  { value: 'bereavement', label: 'Bereavement' },
+  { value: 'medical', label: 'Medical or hospital' },
+  { value: 'wedding', label: 'Wedding' },
+  { value: 'education', label: 'School fees' },
+  { value: 'other', label: 'Another emergency' },
+] as const;
+type Reason = (typeof REASONS)[number]['value'];
 
-  const claims = [
-    { name: 'Grace M.', reason: 'Medical Hospitalization Support', status: 'Approved', amount: 'KSh 10,000' },
-    { name: 'John K.', reason: 'Bereavement Fund Support', status: 'Disbursed', amount: 'KSh 15,000' },
-  ];
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Welfare Emergency Fund</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        {/* Tutorial Banner */}
-        <View style={[styles.tutorialCard, { backgroundColor: isDark ? '#1E1B4B' : '#EEF2FF', borderColor: isDark ? '#312E81' : '#C7D2FE' }]}>
-          <View style={styles.tutorialHeader}>
-            <Ionicons name="heart-circle-outline" size={22} color="#6366F1" />
-            <Text style={[styles.tutorialTitle, { color: isDark ? '#C7D2FE' : '#3730A3' }]}>
-              Welfare Policy Overview
-            </Text>
-          </View>
-          <Text style={[styles.tutorialText, { color: isDark ? '#E0E7FF' : '#4338CA' }]}>
-            The Welfare Fund is reserved for emergency claims (e.g. medical emergencies, bereavement). Members submit claims which are reviewed and disbursed by group officers.
-          </Text>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardSub, { color: colors.textSecondary }]}>TOTAL WELFARE POOL</Text>
-          <Text style={[styles.cardAmount, { color: colors.primary }]}>KSh 45,000</Text>
-          <Text style={[styles.cardText, { color: colors.textSecondary }]}>Covers medical emergencies, bereavement & life events for members.</Text>
-        </View>
-
-        <TouchableOpacity style={[styles.claimBtn, { backgroundColor: colors.primary }]}>
-          <Ionicons name="heart" size={20} color="#FFFFFF" />
-          <Text style={styles.claimBtnText}>Submit Emergency Claim</Text>
-        </TouchableOpacity>
-
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Claims & Grants</Text>
-
-        {claims.length === 0 ? (
-          <EmptyState
-            icon="heart-dislike-outline"
-            title="No Welfare Claims"
-            description="There are currently no active or historical emergency welfare claims recorded for your Chama group."
-          />
-        ) : (
-          claims.map((claim, idx) => (
-            <View key={idx} style={[styles.claimCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.claimName, { color: colors.text }]}>{claim.name}</Text>
-                <Text style={[styles.claimReason, { color: colors.textSecondary }]}>{claim.reason}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={[styles.claimAmount, { color: colors.primary }]}>{claim.amount}</Text>
-                <Text style={[styles.claimStatus, { color: colors.textSecondary }]}>{claim.status}</Text>
-              </View>
-            </View>
-          ))
-        )}
-      </ScrollView>
-    </SafeAreaView>
-  );
+const STATUS: Record<string, [ChipKind, string]> = {
+  pending: ['pending', 'Waiting for officials'],
+  approved: ['paid', 'Approved'],
+  paid: ['paid', 'Paid out'],
+  rejected: ['failed', 'Declined'],
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 16 },
-  tutorialCard: { padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 16 },
-  tutorialHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  tutorialTitle: { fontSize: 14, fontWeight: 'bold' },
-  tutorialText: { fontSize: 12, lineHeight: 18 },
-  card: { padding: 20, borderRadius: 18, borderWidth: 1, marginBottom: 16 },
-  cardSub: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
-  cardAmount: { fontSize: 28, fontWeight: 'bold', marginVertical: 6 },
-  cardText: { fontSize: 12, marginTop: 4 },
-  claimBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: 14, marginBottom: 20 },
-  claimBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
-  claimCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
-  claimName: { fontSize: 14, fontWeight: 'bold' },
-  claimReason: { fontSize: 12, marginTop: 2 },
-  claimAmount: { fontSize: 14, fontWeight: 'bold' },
-  claimStatus: { fontSize: 11, marginTop: 2 },
-});
+export const WelfareScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const { member, group } = useAuth();
+  const { colors } = useTheme();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<Reason>('bereavement');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState('');
 
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['welfare', group?.id],
+    enabled: !!group?.id,
+    queryFn: () => api<{ fund: any; claims: any[] }>(`/api/welfare/status?chama_id=${group!.id}`, { method: 'GET' }),
+  });
+  const fund = data?.fund;
+  const claims = (data?.claims ?? []).filter((c) => c.membership_id === member?.id);
+  const max = Number(fund?.max_claim_amount ?? 50000);
+
+  const submit = async () => {
+    setError('');
+    const n = Number(amount);
+    if (!(n > 0)) return setError('Enter an amount.');
+    if (n > max) return setError(`The most you can ask for is ${formatKsh(max)}.`);
+    setBusy(true);
+    try {
+      await api('/api/welfare/claim', { body: { chama_id: group!.id, membership_id: member!.id, amount: n, reason, description: description.trim() || undefined } });
+      setOpen(false);
+      setAmount('');
+      setDescription('');
+      setDone('Your request is with the officials. You will get a notification when they decide.');
+      refetch();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not send your request.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Screen title="Welfare fund" subtitle="Money the group keeps aside to help a member through a hard time." onBack={() => navigation.goBack()} refreshing={isRefetching} onRefresh={refetch}>
+      {isLoading ? <Loading /> : (
+        <>
+          {done ? <View style={{ marginBottom: 12 }}><Notice tone="ok">{done}</Notice></View> : null}
+          <Panel tone="lavender" style={{ padding: 22, borderRadius: 28 }}>
+            <T v="small" style={{ color: colors.lavenderInk }}>In the fund now</T>
+            <Money value={fund?.balance ?? 0} v="moneyLg" style={{ color: colors.lavenderInk, marginTop: 4 }} />
+            <T v="small" style={{ color: colors.lavenderInk, marginTop: 6 }}>
+              Each member adds {formatKsh(fund?.monthly_contribution ?? 0)} a month. One request can be up to {formatKsh(max)}.
+            </T>
+            <Button label="Ask for support" variant="forest" size="lg" icon="heart-outline" style={{ marginTop: 18 }} onPress={() => { setError(''); setOpen(true); }} />
+          </Panel>
+
+          <SectionTitle>Your requests</SectionTitle>
+          <Panel style={{ paddingVertical: claims.length ? 4 : 18 }}>
+            {claims.length === 0 ? (
+              <Empty icon="heart-outline" title="No requests yet">If something happens, ask here. Officials see it straight away.</Empty>
+            ) : claims.map((c, i) => {
+              const [kind, label] = STATUS[c.status] ?? ['neutral', c.status];
+              return (
+                <Row
+                  key={c.id}
+                  icon="heart-outline"
+                  iconTone="lavender"
+                  title={formatKsh(c.amount)}
+                  subtitle={`${REASONS.find((r) => r.value === c.reason)?.label ?? c.reason}, ${shortDate(c.created_at)}`}
+                  right={<Chip kind={kind} label={label} />}
+                  last={i === claims.length - 1}
+                />
+              );
+            })}
+          </Panel>
+        </>
+      )}
+
+      <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.page, padding: 20, gap: 18 }}>
+          <T v="display" style={{ marginTop: 8 }}>Ask for support</T>
+          <T v="small" tone="ink2">Your officials decide. Other members don&apos;t see your reason.</T>
+          <Choices label="What is it for?" value={reason} onChange={setReason} items={REASONS as unknown as { value: Reason; label: string }[]} />
+          <Field label="How much do you need?" hint={`Up to ${formatKsh(max)}`} keyboardType="number-pad" value={amount} onChangeText={setAmount} placeholder="10000" />
+          <Field label="What happened (optional)" multiline value={description} onChangeText={setDescription} maxLength={1000} />
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          <Button label="Send request" size="lg" loading={busy} onPress={submit} />
+          <Button label="Cancel" variant="ghost" onPress={() => setOpen(false)} />
+        </View>
+      </Modal>
+    </Screen>
+  );
+};

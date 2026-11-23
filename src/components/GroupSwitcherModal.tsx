@@ -1,190 +1,54 @@
 import React from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
+import { Modal, Pressable, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { Avatar, Chip, ROLE_LABEL, T } from '../ui';
 
-interface GroupSwitcherModalProps {
-  visible: boolean;
-  onClose: () => void;
-}
-
-export const GroupSwitcherModal: React.FC<GroupSwitcherModalProps> = ({
-  visible,
-  onClose,
-}) => {
+export const GroupSwitcherModal: React.FC<{ visible: boolean; onClose: () => void }> = ({ visible, onClose }) => {
   const { group, userMemberships, switchActiveGroup } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.overlay}>
-        <View
-          style={[
-            styles.sheet,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <View style={styles.header}>
-            <View>
-              <Text style={[styles.title, { color: colors.text }]}>Switch Active Chama</Text>
-              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-                Select the group context for transactions & metrics
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <Ionicons name="close" size={24} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.list}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' }} onPress={onClose} accessibilityLabel="Close" />
+      <View style={{ backgroundColor: colors.page, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 22, paddingBottom: 40, maxHeight: '75%' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <T v="display">Your groups</T>
+          <Pressable onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}>
+            <Ionicons name="close" size={26} color={colors.ink2} />
+          </Pressable>
+        </View>
+        <T v="small" tone="ink2" style={{ marginTop: 6, marginBottom: 16 }}>Everything in the app shows the group you pick.</T>
+        <ScrollView>
+          <View style={{ gap: 10 }}>
             {userMemberships.map((m) => {
               const ch = m.chamas_v2;
               if (!ch) return null;
-              const isActive = ch.id === group?.id;
-
+              const on = ch.id === group?.id;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={ch.id}
-                  style={[
-                    styles.groupItem,
-                    {
-                      backgroundColor: isActive
-                        ? isDark
-                          ? '#052E16'
-                          : '#ECFDF5'
-                        : isDark
-                        ? '#1F2937'
-                        : '#F8FAFC',
-                      borderColor: isActive ? colors.primary : colors.border,
-                    },
-                  ]}
-                  onPress={() => {
-                    switchActiveGroup(ch.id);
-                    onClose();
-                  }}
-                  activeOpacity={0.8}
+                  onPress={() => { switchActiveGroup(ch.id); onClose(); }}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 22, borderWidth: on ? 2 : 1, borderColor: on ? colors.brand : colors.line, backgroundColor: on ? colors.tint : colors.surface, opacity: pressed ? 0.8 : 1 })}
                 >
-                  <View
-                    style={[
-                      styles.iconCircle,
-                      {
-                        backgroundColor: isActive
-                          ? colors.primary
-                          : isDark
-                          ? '#374151'
-                          : '#E2E8F0',
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name="people"
-                      size={20}
-                      color={isActive ? '#FFFFFF' : colors.text}
-                    />
+                  <Avatar name={ch.name} tone={on ? 'mint' : 'sage'} size={44} />
+                  <View style={{ flex: 1 }}>
+                    <T v="bodyStrong" numberOfLines={1}>{ch.name}</T>
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                      <Chip kind="neutral" label={ROLE_LABEL[m.role] ?? m.role} />
+                      {m.status === 'pending' ? <Chip kind="late" label="Waiting for approval" /> : null}
+                    </View>
                   </View>
-
-                  <View style={styles.groupInfo}>
-                    <Text
-                      style={[
-                        styles.groupName,
-                        { color: colors.text, fontWeight: isActive ? 'bold' : '600' },
-                      ]}
-                    >
-                      {ch.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.groupRole,
-                        { color: isActive ? colors.primary : colors.textSecondary },
-                      ]}
-                    >
-                      Role: {m.role || 'Member'} • Code: {ch.group_code || 'N/A'}
-                    </Text>
-                  </View>
-
-                  {isActive ? (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={24}
-                      color={colors.primary}
-                    />
-                  ) : null}
-                </TouchableOpacity>
+                  {on ? <Ionicons name="checkmark-circle" size={24} color={colors.brand} /> : null}
+                </Pressable>
               );
             })}
-          </ScrollView>
-        </View>
+          </View>
+        </ScrollView>
       </View>
     </Modal>
   );
 };
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    maxHeight: '75%',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  list: {
-    marginVertical: 4,
-  },
-  groupItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  groupInfo: {
-    flex: 1,
-  },
-  groupName: {
-    fontSize: 15,
-  },
-  groupRole: {
-    fontSize: 12,
-    marginTop: 2,
-    textTransform: 'capitalize',
-  },
-});

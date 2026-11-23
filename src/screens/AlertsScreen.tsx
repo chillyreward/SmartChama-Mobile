@@ -1,58 +1,69 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity } from 'react-native';
+import React, { useEffect } from 'react';
+import { View } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
+import { supabase } from '../lib/supabase';
+import { Empty, Loading, Panel, Row, Screen, T, shortDate, type IconName } from '../ui';
 
-export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { colors } = useTheme();
-
-  const alerts = [
-    { id: '1', title: 'Monthly Contribution Due', desc: 'KSh 2,500 due by 5th of this month', date: 'Today', type: 'reminder' },
-    { id: '2', title: 'Payout Scheduled', desc: 'Your merry-go-round payout of KSh 15,000 was approved by Chairlady', date: 'Yesterday', type: 'success' },
-    { id: '3', title: 'Merry-Go-Round Rotation', desc: 'You are next in queue for payout on July 15', date: '3 days ago', type: 'info' },
-  ];
-
-  return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications & Alerts</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <FlatList
-        data={alerts}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons
-              name={item.type === 'reminder' ? 'notifications' : item.type === 'success' ? 'checkmark-circle' : 'information-circle'}
-              size={24}
-              color={colors.primary}
-            />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
-              <Text style={[styles.desc, { color: colors.textSecondary }]}>{item.desc}</Text>
-              <Text style={[styles.date, { color: colors.textSecondary }]}>{item.date}</Text>
-            </View>
-          </View>
-        )}
-      />
-    </SafeAreaView>
-  );
+const ICON: Record<string, IconName> = {
+  contribution: 'checkmark-circle-outline',
+  payment: 'checkmark-circle-outline',
+  reminder: 'alarm-outline',
+  new_member: 'person-add-outline',
+  welfare: 'heart-outline',
+  payout: 'sync-outline',
+  penalty: 'alert-circle-outline',
+  withdrawal: 'wallet-outline',
 };
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  list: { padding: 16 },
-  card: { flexDirection: 'row', alignItems: 'flex-start', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
-  title: { fontSize: 14, fontWeight: 'bold' },
-  desc: { fontSize: 12, marginTop: 2 },
-  date: { fontSize: 10, marginTop: 4 },
-});
+export const AlertsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const { session } = useAuth();
+  const { colors } = useTheme();
+  const qc = useQueryClient();
+  const uid = session?.user?.id;
+
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['notifications', uid],
+    enabled: !!uid,
+    queryFn: async () => {
+      const { data } = await supabase.from('notifications').select('*').eq('profile_id', uid!).order('created_at', { ascending: false }).limit(60);
+      return data ?? [];
+    },
+  });
+
+  // Opening the list marks everything read, like on the web
+  useEffect(() => {
+    if (!uid || !data?.some((n: any) => !n.read)) return;
+    supabase.from('notifications').update({ read: true }).eq('profile_id', uid).eq('read', false).then(() => {
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    });
+  }, [uid, data, qc]);
+
+  return (
+    <Screen title="Notifications" onBack={() => navigation.goBack()} refreshing={isRefetching} onRefresh={refetch}>
+      {isLoading ? <Loading /> : !data?.length ? (
+        <Panel><Empty icon="notifications-outline" title="Nothing new">Payment confirmations, reminders and decisions from your officials show here.</Empty></Panel>
+      ) : (
+        <Panel style={{ paddingVertical: 4 }}>
+          {data.map((n: any, i: number) => (
+            <Row
+              key={n.id}
+              icon={ICON[n.type] ?? 'notifications-outline'}
+              iconTone={n.read ? 'raised' : 'mint'}
+              title={
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                  <T v="bodyStrong" style={{ flex: 1 }} numberOfLines={1}>{n.title}</T>
+                  <T v="caption" tone="ink3">{shortDate(n.created_at)}</T>
+                </View>
+              }
+              subtitle={n.message}
+              last={i === data.length - 1}
+            />
+          ))}
+        </Panel>
+      )}
+      <T v="caption" tone="ink3" style={{ marginTop: 12, color: colors.ink3 }}>Showing your latest 60.</T>
+    </Screen>
+  );
+};

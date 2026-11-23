@@ -1,97 +1,92 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useMemo } from 'react';
+import { View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { Ionicons } from '@expo/vector-icons';
+import { Loading, Money, Panel, Screen, SectionTitle, T, formatKsh } from '../ui';
 
 export const AnalyticsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { group } = useAuth();
-  const { colors, isDark } = useTheme();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ totalSaved: 0, members: 0, contributionCount: 0 });
+  const { group, member } = useAuth();
+  const { colors } = useTheme();
 
-  useEffect(() => {
-    async function loadData() {
-      if (!group?.id) return;
-      try {
-        const { data: contribs } = await supabase.from('contributions_v2').select('amount').eq('chama_id', group.id).eq('status', 'confirmed');
-        const sum = contribs?.reduce((acc: number, curr: any) => acc + (Number(curr.amount) || 0), 0) || 0;
-        const { count: memberCount } = await supabase
-          .from('chama_memberships')
-          .select('id', { count: 'exact', head: true })
-          .eq('chama_id', group.id)
-          .eq('status', 'active');
-        setStats({ totalSaved: sum, members: memberCount || 0, contributionCount: contribs?.length || 0 });
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadData();
-  }, [group?.id]);
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['progress', group?.id, member?.id],
+    enabled: !!group?.id && !!member?.id,
+    queryFn: async () => {
+      const since = new Date();
+      since.setMonth(since.getMonth() - 11, 1);
+      const [mine, all, members] = await Promise.all([
+        supabase.from('contributions_v2').select('amount, created_at').eq('membership_id', member!.id).eq('status', 'confirmed').gte('created_at', since.toISOString()),
+        supabase.from('contributions_v2').select('amount').eq('chama_id', group!.id).eq('status', 'confirmed'),
+        supabase.from('chama_memberships').select('id', { count: 'exact', head: true }).eq('chama_id', group!.id).eq('status', 'active'),
+      ]);
+      return {
+        mine: mine.data ?? [],
+        groupTotal: (all.data ?? []).reduce((s: number, c: any) => s + Number(c.amount || 0), 0),
+        members: members.count ?? 0,
+      };
+    },
+  });
+
+  const months = useMemo(() => {
+    const now = new Date();
+    const out = Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - 11 + i, 1);
+      return { key: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleDateString('en-KE', { month: 'narrow' }), name: d.toLocaleDateString('en-KE', { month: 'long' }), total: 0 };
+    });
+    (data?.mine ?? []).forEach((c: any) => {
+      const d = new Date(c.created_at);
+      const m = out.find((x) => x.key === `${d.getFullYear()}-${d.getMonth()}`);
+      if (m) m.total += Number(c.amount || 0);
+    });
+    return out;
+  }, [data?.mine]);
+
+  const year = months.reduce((s, m) => s + m.total, 0);
+  const paid = months.filter((m) => m.total > 0).length;
+  const max = Math.max(1, ...months.map((m) => m.total));
+  const best = months.reduce((a, b) => (b.total > a.total ? b : a), months[0]);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Analytics & Insights</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <Screen title="Your progress" subtitle="What you've put into the group over the last twelve months." onBack={() => navigation.goBack()} refreshing={isRefetching} onRefresh={refetch}>
+      {isLoading || !data ? <Loading /> : (
+        <>
+          <Panel tone="forest" style={{ padding: 22, borderRadius: 28 }}>
+            <T v="small" tone="onForest3">Last 12 months</T>
+            <Money value={year} v="moneyLg" tone="mint" style={{ marginTop: 4 }} />
+            <T v="small" tone="onForest2">You paid in {paid} of 12 months</T>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 5, height: 120, marginTop: 20 }}>
+              {months.map((m, i) => (
+                <View key={m.key} style={{ flex: 1, alignItems: 'center', gap: 6 }} accessibilityLabel={`${m.name}: ${formatKsh(m.total)}`}>
+                  <View style={{ width: '100%', height: Math.max(4, (m.total / max) * 92), borderRadius: 4, backgroundColor: i === 11 ? colors.mint : m.total > 0 ? colors.moss : colors.canopy }} />
+                  <T v="caption" tone="onForest3">{m.label}</T>
+                </View>
+              ))}
+            </View>
+          </Panel>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>CHAMA TOTAL SAVINGS</Text>
-          <Text style={[styles.cardValue, { color: colors.primary }]}>KSh {stats.totalSaved.toLocaleString('en-KE')}</Text>
-          <Text style={[styles.cardSub, { color: colors.textSecondary }]}>+12.4% from last month</Text>
-        </View>
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+            <Panel style={{ flex: 1 }}>
+              <T v="caption" tone="ink2">Best month</T>
+              <T v="title" style={{ marginTop: 6 }}>{best.total > 0 ? best.name : 'None yet'}</T>
+              {best.total > 0 ? <T v="small" tone="ink2">{formatKsh(best.total)}</T> : null}
+            </Panel>
+            <Panel style={{ flex: 1 }}>
+              <T v="caption" tone="ink2">Monthly average</T>
+              <T v="title" style={{ marginTop: 6 }}>{formatKsh(paid ? year / paid : 0)}</T>
+              <T v="small" tone="ink2">in months you paid</T>
+            </Panel>
+          </View>
 
-        <View style={styles.grid}>
-          <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.gridTitle, { color: colors.textSecondary }]}>Active Members</Text>
-            <Text style={[styles.gridValue, { color: colors.text }]}>{stats.members}</Text>
-          </View>
-          <View style={[styles.gridCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.gridTitle, { color: colors.textSecondary }]}>Confirmed Payments</Text>
-            <Text style={[styles.gridValue, { color: colors.text }]}>{stats.contributionCount}</Text>
-          </View>
-        </View>
-
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 16 }]}>
-          <Text style={[styles.cardTitle, { color: colors.textSecondary }]}>MONTHLY CONTRIBUTIONS PERFORMANCE</Text>
-          <View style={styles.chartBarRow}>
-            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month, idx) => (
-              <View key={month} style={styles.barCol}>
-                <View style={[styles.bar, { height: 40 + idx * 12, backgroundColor: colors.primary }]} />
-                <Text style={[styles.barLabel, { color: colors.textSecondary }]}>{month}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          <SectionTitle>The whole group</SectionTitle>
+          <Panel tone="sage">
+            <T v="small" tone="sageInk">Saved together since the group started</T>
+            <Money value={data.groupTotal} v="display" tone="sageInk" style={{ marginTop: 4 }} />
+            <T v="small" tone="sageInk" style={{ marginTop: 4 }}>{data.members} active {data.members === 1 ? 'member' : 'members'}</T>
+          </Panel>
+        </>
+      )}
+    </Screen>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 16 },
-  card: { padding: 18, borderRadius: 16, borderWidth: 1 },
-  cardTitle: { fontSize: 11, fontWeight: 'bold', letterSpacing: 0.5 },
-  cardValue: { fontSize: 28, fontWeight: 'bold', marginVertical: 6 },
-  cardSub: { fontSize: 12 },
-  grid: { flexDirection: 'row', gap: 12, marginTop: 14 },
-  gridCard: { flex: 1, padding: 16, borderRadius: 16, borderWidth: 1 },
-  gridTitle: { fontSize: 12 },
-  gridValue: { fontSize: 20, fontWeight: 'bold', marginTop: 4 },
-  chartBarRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 130, marginTop: 16, paddingHorizontal: 8 },
-  barCol: { alignItems: 'center', flex: 1 },
-  bar: { width: 18, borderRadius: 6 },
-  barLabel: { fontSize: 10, marginTop: 6 },
-});

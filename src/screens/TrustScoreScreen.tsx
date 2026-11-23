@@ -1,68 +1,84 @@
-import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useMemo } from 'react';
+import { View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
+import { standing, trustBreakdown, type TrustRow } from '../lib/trust';
+import { Loading, Meter, Money, Notice, Panel, Screen, SectionTitle, T } from '../ui';
 import { useTheme } from '../contexts/ThemeContext';
-import { Ionicons } from '@expo/vector-icons';
 
 export const TrustScoreScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { member } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { member, group } = useAuth();
+  const { colors } = useTheme();
+
+  const { data, isLoading, refetch, isRefetching } = useQuery({
+    queryKey: ['trust', member?.id],
+    enabled: !!member?.id,
+    queryFn: async () => {
+      const [c, m] = await Promise.all([
+        supabase.from('contributions_v2').select('created_at, amount, payment_method, mpesa_receipt').eq('membership_id', member!.id).eq('status', 'confirmed').order('created_at'),
+        supabase.from('chama_memberships').select('joined_at').eq('id', member!.id).maybeSingle(),
+      ]);
+      return { rows: (c.data ?? []) as TrustRow[], joinedAt: m.data?.joined_at ? new Date(m.data.joined_at) : null };
+    },
+  });
+
+  const b = useMemo(() => (data ? trustBreakdown(data.rows, data.joinedAt) : null), [data]);
+  const score = Number(member?.trust_score ?? 0);
+  const st = standing(score);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>AI Trust Score</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.scoreHero, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.badgeCircle, { borderColor: colors.primary }]}>
-            <Text style={[styles.scoreNumber, { color: colors.primary }]}>94</Text>
-            <Text style={[styles.scoreMax, { color: colors.textSecondary }]}>/ 100</Text>
-          </View>
-          <Text style={[styles.ratingLabel, { color: colors.text }]}>Excellent Standing</Text>
-          <Text style={[styles.ratingSub, { color: colors.textSecondary }]}>
-            Keep contributing on time to stay in top standing with your group.
-          </Text>
-        </View>
-
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Trust Factors</Text>
-        {[
-          { title: 'On-Time Contributions', score: '98%', status: 'Great', icon: 'checkmark-circle' },
-          { title: 'Contribution Streak', score: '100%', status: 'Perfect', icon: 'flame' },
-          { title: 'Meeting Attendance', score: '90%', status: 'Good', icon: 'people' },
-        ].map((factor, idx) => (
-          <View key={idx} style={[styles.factorCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Ionicons name={factor.icon as any} size={24} color={colors.primary} />
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={[styles.factorTitle, { color: colors.text }]}>{factor.title}</Text>
-              <Text style={[styles.factorScore, { color: colors.textSecondary }]}>{factor.score} • {factor.status}</Text>
+    <Screen
+      title="Trust score"
+      subtitle="A number from 0 to 100 that shows how reliably you save in this group. You decide who else sees it."
+      onBack={() => navigation.goBack()}
+      refreshing={isRefetching}
+      onRefresh={refetch}
+    >
+      {isLoading || !b ? <Loading /> : (
+        <>
+          <Panel tone="forest" style={{ padding: 22, borderRadius: 28 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <T v="small" tone="onForest3">{st.label}</T>
+                <T v="title" tone="onForest" style={{ marginTop: 4 }}>{member?.profiles?.full_name}</T>
+                <T v="small" tone="onForest2" style={{ marginTop: 6 }}>{st.note}</T>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <T v="hero" tone="mint" style={{ fontSize: 72, lineHeight: 76 }}>{score}</T>
+                <T v="caption" tone="onForest3">out of 100</T>
+              </View>
             </View>
+            <View style={{ marginTop: 18 }}><Meter value={score} segments={30} height={26} onColor={colors.mint} offColor={colors.canopy} /></View>
+          </Panel>
+
+          <SectionTitle>Where your points come from</SectionTitle>
+          <View style={{ gap: 12 }}>
+            {b.parts.map((p) => (
+              <Panel key={p.label}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <T v="bodyStrong">{p.label}</T>
+                  <T v="money">{p.points}<T v="small" tone="ink3"> / {p.max}</T></T>
+                </View>
+                <View style={{ marginTop: 10 }}><Meter value={p.points} max={p.max} segments={p.max > 30 ? 22 : 12} height={12} /></View>
+                <T v="small" tone="ink2" style={{ marginTop: 10 }}>{p.detail}</T>
+              </Panel>
+            ))}
           </View>
-        ))}
-      </ScrollView>
-    </SafeAreaView>
+
+          <SectionTitle>Your record in {group?.name || 'this group'}</SectionTitle>
+          <Panel>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View><T v="caption" tone="ink3">Saved</T><Money value={b.totalSaved} /></View>
+              <View><T v="caption" tone="ink3">Months paid</T><T v="money">{b.paidMonths} of {b.monthsActive}</T></View>
+              <View><T v="caption" tone="ink3">Streak</T><T v="money">{b.streak}</T></View>
+            </View>
+          </Panel>
+          <View style={{ marginTop: 16 }}>
+            <Notice tone="info">This is not a credit rating and no regulator oversees it. You can download it as a credit passport PDF on the Akibora website.</Notice>
+          </View>
+        </>
+      )}
+    </Screen>
   );
 };
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  backBtn: { padding: 4 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 16 },
-  scoreHero: { padding: 24, borderRadius: 20, borderWidth: 1, alignItems: 'center', marginBottom: 20 },
-  badgeCircle: { width: 100, height: 100, borderRadius: 50, borderWidth: 6, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  scoreNumber: { fontSize: 32, fontWeight: 'bold' },
-  scoreMax: { fontSize: 11 },
-  ratingLabel: { fontSize: 18, fontWeight: 'bold' },
-  ratingSub: { fontSize: 13, textAlign: 'center', marginTop: 4 },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 12 },
-  factorCard: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 10 },
-  factorTitle: { fontSize: 14, fontWeight: '600' },
-  factorScore: { fontSize: 12, marginTop: 2 },
-});

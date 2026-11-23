@@ -1,74 +1,63 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Switch,
-  Alert,
-  Modal,
-  ActivityIndicator,
-  useColorScheme,
-  Linking,
-} from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useEffect, useState } from 'react';
+import { Alert, Linking, Modal, Switch, View } from 'react-native';
 import * as Application from 'expo-application';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme, type ThemeMode } from '../contexts/ThemeContext';
 import { env } from '../config/env';
 import { endpoints } from '../lib/api';
 import { allowSensitiveAction } from '../security/biometric';
-import { useTheme } from '../contexts/ThemeContext';
 import { supabase } from '../lib/supabase';
-import { colors } from '../theme/colors';
+import { Avatar, Button, Field, Notice, Panel, ROLE_LABEL, Row, Screen, SectionTitle, Segmented, T, shortDate } from '../ui';
 
-export const ProfileScreen: React.FC = () => {
+// Same keys and defaults as the web settings page, saved on profiles.notification_prefs
+const PREFS = [
+  { key: 'contribution_reminders', label: 'Contribution reminders', hint: 'Before and on the day a payment is due' },
+  { key: 'late_payment_alerts', label: 'Late payment alerts', hint: 'If a payment is missed or a fine is added' },
+  { key: 'new_member_joins', label: 'New members', hint: 'When someone joins the group' },
+  { key: 'sms_notifications', label: 'By SMS', hint: 'Works on any phone' },
+] as const;
+const DEFAULTS: Record<string, boolean> = {
+  contribution_reminders: true, late_payment_alerts: true, monthly_report: true, new_member_joins: true,
+  whatsapp_notifications: false, sms_notifications: true, email_notifications: false,
+};
+
+export const ProfileScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
   const { session, member, group, signOut, refreshAuth } = useAuth();
-  const { mode: themeMode, setThemeMode, colors, isDark } = useTheme();
-
-  // Edit Name State
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const { mode, setThemeMode, colors } = useTheme();
+  const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(member?.profiles?.full_name || '');
-  const [updating, setUpdating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState('');
+  const [prefs, setPrefs] = useState<Record<string, boolean>>(DEFAULTS);
+  const [deleting, setDeleting] = useState(false);
 
-  // Settings State
-  const [smsNotifs, setSmsNotifs] = useState(true);
-  const [pushNotifs, setPushNotifs] = useState(true);
-  const [language, setLanguage] = useState<'en' | 'sw'>('en');
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    supabase.from('profiles').select('notification_prefs').eq('id', session.user.id).maybeSingle().then(({ data }) => {
+      if (data?.notification_prefs) setPrefs({ ...DEFAULTS, ...data.notification_prefs });
+    });
+  }, [session?.user?.id]);
 
-  const getInitials = (name?: string) => {
-    if (!name) return 'M';
-    const parts = name.trim().split(' ');
-    return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
-  };
-
-  const handleSaveProfile = async () => {
-    if (!fullName.trim() || !session?.user?.id) return;
-
-    setUpdating(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: fullName.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', session.user.id);
-
-      if (error) throw error;
-
-      Alert.alert('Profile Updated', 'Your full name has been updated.');
-      setEditModalVisible(false);
-      await refreshAuth();
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not update profile.');
-    } finally {
-      setUpdating(false);
+  const togglePref = async (key: string) => {
+    const next = { ...prefs, [key]: !prefs[key] };
+    setPrefs(next);
+    const { error } = await supabase.from('profiles').update({ notification_prefs: next }).eq('id', session!.user.id);
+    if (error) {
+      setPrefs(prefs);
+      Alert.alert('Not saved', 'Check your connection and try again.');
     }
   };
 
-  const [deleting, setDeleting] = useState(false);
+  const saveName = async () => {
+    setNameError('');
+    if (!fullName.trim()) return setNameError('Enter your name.');
+    setSaving(true);
+    const { error } = await supabase.from('profiles').update({ full_name: fullName.trim(), updated_at: new Date().toISOString() }).eq('id', session!.user.id);
+    setSaving(false);
+    if (error) return setNameError(error.message || 'Could not save.');
+    setEditing(false);
+    refreshAuth();
+  };
 
   // Google Play requires in-app account deletion. Personal details are erased;
   // the group's financial records are kept (see /account/delete on the web).
@@ -77,536 +66,84 @@ export const ProfileScreen: React.FC = () => {
     setDeleting(true);
     try {
       await endpoints.deleteAccount();
-      Alert.alert('Account deleted', 'Your personal details have been erased and you have been signed out.');
+      Alert.alert('Account deleted', 'Your personal details are erased and you are signed out.');
       await signOut();
     } catch (err: any) {
-      Alert.alert('Could not delete account', err.message || 'Please try again.');
+      Alert.alert('Could not delete your account', err.message || 'Please try again.');
     } finally {
       setDeleting(false);
     }
   };
 
-  const handleDeleteAccount = () => {
+  const confirmDelete = () => {
     Alert.alert(
       'Delete your account?',
-      'We will erase your name, phone number, email, ID number and photo, and you will not be able to sign in again. ' +
-        "Your group keeps the records of your contributions for its accounts. You can't undo this.",
+      "We erase your name, phone number, email, ID number and photo, and you can't sign in again. Your group keeps the record of your contributions for its accounts. This can't be undone.",
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Learn more', onPress: () => Linking.openURL(env.deleteAccountUrl).catch(() => {}) },
-        {
-          text: 'Delete account',
-          style: 'destructive',
-          onPress: () =>
-            Alert.alert('Are you sure?', 'This permanently deletes your Akibora account.', [
-              { text: 'Keep my account', style: 'cancel' },
-              { text: 'Yes, delete', style: 'destructive', onPress: performDelete },
-            ]),
-        },
-      ]
+        { text: 'Delete account', style: 'destructive', onPress: () => Alert.alert('Are you sure?', 'This permanently deletes your Akibora account.', [{ text: 'Keep my account', style: 'cancel' }, { text: 'Yes, delete', style: 'destructive', onPress: performDelete }]) },
+      ],
     );
   };
 
-  const handleSignOutConfirm = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out of Akibora?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
-  };
+  const name = member?.profiles?.full_name || 'Your name';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile & Settings</Text>
-          <Text style={styles.headerSub}>Account Preferences</Text>
-        </View>
-
-        {/* Section 1: Profile Header Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatarLarge}>
-            <Text style={styles.avatarLargeText}>{getInitials(member?.profiles?.full_name)}</Text>
-          </View>
-
-          <Text style={styles.profileName}>{member?.profiles?.full_name || 'Akibora Member'}</Text>
-          <Text style={styles.profileContact}>
-            {member?.profiles?.phone_number || member?.profiles?.email || '—'}
-          </Text>
-
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>
-              {member?.role ? member.role.toUpperCase() : 'MEMBER'}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.editProfileBtn}
-            onPress={() => {
-              setFullName(member?.profiles?.full_name || '');
-              setEditModalVisible(true);
-            }}
-          >
-            <Text style={styles.editProfileBtnText}>✏️ Edit Profile</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Section 2: Account Overview Info */}
-        <Text style={styles.sectionTitle}>Account Info</Text>
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Chama Group</Text>
-            <Text style={styles.infoValue}>{group?.name || 'Akibora'}</Text>
-          </View>
-          <View style={styles.infoDivider} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Trust Score</Text>
-            <Text style={[styles.infoValue, { color: colors.primary }]}>
-              ⭐ {member?.trust_score || 100} / 100
-            </Text>
-          </View>
-          <View style={styles.infoDivider} />
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Member Since</Text>
-            <Text style={styles.infoValue}>
-              {member?.created_at
-                ? new Date(member.created_at).toLocaleDateString('en-GB', {
-                    month: 'short',
-                    year: 'numeric',
-                  })
-                : '2024'}
-            </Text>
+    <Screen title="Profile and settings" onBack={navigation?.canGoBack?.() ? () => navigation.goBack() : undefined}>
+      <Panel tone="forest" style={{ padding: 22, borderRadius: 28 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <Avatar name={name} size={60} tone="mint" />
+          <View style={{ flex: 1 }}>
+            <T v="title" tone="onForest" numberOfLines={1}>{name}</T>
+            <T v="small" tone="onForest2">{member?.profiles?.phone_number || member?.profiles?.email || ''}</T>
           </View>
         </View>
-
-        {/* Section 3: Preferences & Settings */}
-        <Text style={styles.sectionTitle}>Preferences</Text>
-        <View style={styles.settingsCard}>
-          {/* Notifications */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>Push Notifications</Text>
-              <Text style={styles.settingSub}>Alerts for contributions & payouts</Text>
-            </View>
-            <Switch
-              value={pushNotifs}
-              onValueChange={setPushNotifs}
-              trackColor={{ false: '#CBD5E1', true: colors.primary }}
-            />
-          </View>
-
-          <View style={styles.settingDivider} />
-
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>SMS Notifications</Text>
-              <Text style={styles.settingSub}>Africa's Talking SMS alerts</Text>
-            </View>
-            <Switch
-              value={smsNotifs}
-              onValueChange={setSmsNotifs}
-              trackColor={{ false: '#CBD5E1', true: colors.primary }}
-            />
-          </View>
-
-          <View style={styles.settingDivider} />
-
-          {/* Language Selector */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>App Language</Text>
-              <Text style={styles.settingSub}>{language === 'en' ? 'English' : 'Kiswahili'}</Text>
-            </View>
-            <View style={styles.langSelector}>
-              <TouchableOpacity
-                style={[styles.langChip, language === 'en' && styles.langChipActive]}
-                onPress={() => setLanguage('en')}
-              >
-                <Text style={[styles.langText, language === 'en' && styles.langTextActive]}>EN</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.langChip, language === 'sw' && styles.langChipActive]}
-                onPress={() => setLanguage('sw')}
-              >
-                <Text style={[styles.langText, language === 'sw' && styles.langTextActive]}>SW</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.settingDivider} />
-
-          {/* Theme Mode */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.settingTitle}>App Theme</Text>
-              <Text style={styles.settingSub}>
-                {themeMode === 'system' ? 'System Default' : themeMode.toUpperCase()}
-              </Text>
-            </View>
-            <View style={styles.langSelector}>
-              <TouchableOpacity
-                style={[styles.langChip, themeMode === 'light' && styles.langChipActive]}
-                onPress={() => setThemeMode('light')}
-              >
-                <Text style={[styles.langText, themeMode === 'light' && styles.langTextActive]}>☀️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.langChip, themeMode === 'dark' && styles.langChipActive]}
-                onPress={() => setThemeMode('dark')}
-              >
-                <Text style={[styles.langText, themeMode === 'dark' && styles.langTextActive]}>🌙</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        <View style={{ flexDirection: 'row', gap: 24, marginTop: 18 }}>
+          <View><T v="caption" tone="onForest3">Role</T><T v="smallStrong" tone="onForest">{ROLE_LABEL[member?.role ?? 'member'] ?? member?.role}</T></View>
+          <View><T v="caption" tone="onForest3">Trust score</T><T v="smallStrong" tone="mint">{Number(member?.trust_score ?? 0)} /100</T></View>
+          <View><T v="caption" tone="onForest3">Since</T><T v="smallStrong" tone="onForest">{shortDate((member as any)?.joined_at || member?.created_at, { month: 'short', year: 'numeric' }) || '—'}</T></View>
         </View>
+        <Button label="Edit name" variant="onForest" size="sm" icon="create-outline" style={{ marginTop: 18, alignSelf: 'flex-start' }} onPress={() => { setFullName(name); setNameError(''); setEditing(true); }} />
+      </Panel>
+      <T v="caption" tone="ink3" style={{ marginTop: 10 }}>{group?.name ? `Signed in to ${group.name}.` : ''} To change your phone number, use Settings on the Akibora website.</T>
 
-        {/* About & Legal */}
-        <Text style={styles.sectionTitle}>About & Legal</Text>
-        <View style={styles.settingsCard}>
-          <TouchableOpacity style={styles.linkRow}>
-            <Text style={styles.linkText}>App Version</Text>
-            <Text style={styles.linkVal}>
-              v{Application.nativeApplicationVersion ?? '-'} ({Application.nativeBuildVersion ?? '-'})
-            </Text>
-          </TouchableOpacity>
-          <View style={styles.settingDivider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL(env.privacyPolicyUrl).catch(() => {})}>
-            <Text style={styles.linkText}>Privacy Policy</Text>
-            <Text style={styles.linkVal}>›</Text>
-          </TouchableOpacity>
-          <View style={styles.settingDivider} />
-          <TouchableOpacity style={styles.linkRow} onPress={() => Linking.openURL(env.termsUrl).catch(() => {})}>
-            <Text style={styles.linkText}>Terms of Service</Text>
-            <Text style={styles.linkVal}>›</Text>
-          </TouchableOpacity>
-        </View>
+      <SectionTitle>Notifications</SectionTitle>
+      <Panel style={{ paddingVertical: 4 }}>
+        {PREFS.map((p, i) => (
+          <Row
+            key={p.key}
+            title={p.label}
+            subtitle={p.hint}
+            right={<Switch value={!!prefs[p.key]} onValueChange={() => togglePref(p.key)} trackColor={{ false: colors.raised, true: colors.moss }} thumbColor={prefs[p.key] ? colors.mint : '#fff'} accessibilityLabel={p.label} />}
+            last={i === PREFS.length - 1}
+          />
+        ))}
+      </Panel>
 
-        {/* Sign Out Button */}
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOutConfirm}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+      <SectionTitle>Appearance</SectionTitle>
+      <Segmented<ThemeMode> value={mode} onChange={setThemeMode} items={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }, { value: 'system', label: 'Phone setting' }]} />
 
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={handleDeleteAccount}
-          disabled={deleting}
-          accessibilityRole="button"
-          accessibilityLabel="Delete my account"
-        >
-          <Text style={styles.deleteText}>{deleting ? 'Deleting…' : 'Delete my account'}</Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <SectionTitle>About</SectionTitle>
+      <Panel style={{ paddingVertical: 4 }}>
+        <Row icon="document-text-outline" title="Privacy" onPress={() => Linking.openURL(env.privacyPolicyUrl).catch(() => {})} />
+        <Row icon="reader-outline" title="Terms" onPress={() => Linking.openURL(env.termsUrl).catch(() => {})} />
+        <Row icon="information-circle-outline" title="Version" right={<T v="small" tone="ink2">{Application.nativeApplicationVersion ?? '-'} ({Application.nativeBuildVersion ?? '-'})</T>} last />
+      </Panel>
 
-      {/* EDIT PROFILE MODAL */}
-      <Modal visible={editModalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Profile</Text>
-              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
-                <Text style={styles.closeBtn}>✕</Text>
-              </TouchableOpacity>
-            </View>
+      <Button label="Sign out" variant="outline" size="lg" icon="log-out-outline" style={{ marginTop: 28 }} onPress={() => Alert.alert('Sign out?', '', [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', style: 'destructive', onPress: signOut }])} />
+      <Button label="Delete my account" variant="danger" size="lg" loading={deleting} style={{ marginTop: 12 }} onPress={confirmDelete} />
 
-            <Text style={styles.inputLabel}>Full Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Enter full name"
-            />
-
-            <TouchableOpacity
-              style={styles.saveModalBtn}
-              onPress={handleSaveProfile}
-              disabled={updating}
-            >
-              {updating ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.saveModalBtnText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+      <Modal visible={editing} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditing(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.page, padding: 20, gap: 18 }}>
+          <T v="display" style={{ marginTop: 8 }}>Your name</T>
+          <T v="small" tone="ink2">As it appears on your ID. Everyone in your group sees it.</T>
+          <Field label="Full name" value={fullName} onChangeText={setFullName} autoComplete="name" />
+          {nameError ? <Notice tone="danger">{nameError}</Notice> : null}
+          <Button label="Save" size="lg" loading={saving} onPress={saveName} />
+          <Button label="Cancel" variant="ghost" onPress={() => setEditing(false)} />
         </View>
       </Modal>
-    </SafeAreaView>
+    </Screen>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background.light,
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: colors.text.light,
-  },
-  headerSub: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-    marginTop: 2,
-  },
-  profileCard: {
-    backgroundColor: colors.card.light,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  avatarLarge: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#DCFCE7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  avatarLargeText: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: colors.primaryDark,
-  },
-  profileName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text.light,
-  },
-  profileContact: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-    marginTop: 2,
-  },
-  roleBadge: {
-    backgroundColor: '#F0FDF4',
-    borderColor: '#BBF7D0',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    marginTop: 10,
-  },
-  roleBadgeText: {
-    color: colors.primaryDark,
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  editProfileBtn: {
-    marginTop: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-  },
-  editProfileBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.text.light,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text.light,
-    marginBottom: 12,
-  },
-  infoCard: {
-    backgroundColor: colors.card.light,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    marginBottom: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: colors.text.light,
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: colors.border.light,
-    marginVertical: 10,
-  },
-  settingsCard: {
-    backgroundColor: colors.card.light,
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    marginBottom: 20,
-  },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  settingTextGroup: {
-    flex: 1,
-    marginRight: 10,
-  },
-  settingTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text.light,
-  },
-  settingSub: {
-    fontSize: 12,
-    color: colors.textSecondary.light,
-    marginTop: 2,
-  },
-  settingDivider: {
-    height: 1,
-    backgroundColor: colors.border.light,
-    marginVertical: 12,
-  },
-  langSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    borderRadius: 10,
-    padding: 3,
-  },
-  langChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  langChipActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  langText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.textSecondary.light,
-  },
-  langTextActive: {
-    color: colors.primary,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  linkText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.text.light,
-  },
-  linkVal: {
-    fontSize: 14,
-    color: colors.textSecondary.light,
-  },
-  signOutButton: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    borderRadius: 16,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    marginBottom: 24,
-  },
-  signOutText: {
-    color: '#991B1B',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  deleteButton: {
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  deleteText: {
-    color: '#B91C1C',
-    fontSize: 14,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: colors.card.light,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    padding: 24,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text.light,
-  },
-  closeBtn: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.textSecondary.light,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.textSecondary.light,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: 14,
-    height: 50,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text.light,
-    marginBottom: 20,
-  },
-  saveModalBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveModalBtnText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-});
