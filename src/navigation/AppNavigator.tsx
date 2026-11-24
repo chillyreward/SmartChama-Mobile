@@ -85,6 +85,7 @@ export const AppNavigator: React.FC = () => {
             <Stack.Screen name="Welfare" component={WelfareScreen} />
             <Stack.Screen name="MerryGoRound" component={MerryGoRoundScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
+            <Stack.Screen name="JoinAnother" component={JoinChamaScreen} />
           </Stack.Group>
         )}
       </Stack.Navigator>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -12,6 +12,7 @@ import { OfflineBanner } from './src/components/OfflineBanner';
 import { AppLock } from './src/security/AppLock';
 import { initIntegrations, integrations } from './src/integrations';
 import { useAppFonts } from './src/theme/fonts';
+import { BrandLoader } from './src/components/BrandLoader';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -24,11 +25,14 @@ AsyncStorage.removeItem('REACT_QUERY_OFFLINE_CACHE').catch(() => {});
 function MainApp() {
   const { isDark } = useTheme();
   const { session, signOut } = useAuth();
+  const [loaderDone, setLoaderDone] = useState(false);
+  const finishLoader = useCallback(() => setLoaderDone(true), []);
 
   useEffect(() => {
+    // Hand over from the native splash to the animated brand screen
     const timer = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
-    }, 500);
+    }, 50);
     // Download any OTA fix in the background; it applies on next launch
     integrations.appUpdates.checkAndApply().catch(() => {});
     return () => clearTimeout(timer);
@@ -39,6 +43,7 @@ function MainApp() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <OfflineBanner />
       <AppNavigator />
+      {!loaderDone ? <BrandLoader onDone={finishLoader} /> : null}
     </AppLock>
   );
 }

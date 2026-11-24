@@ -7,7 +7,8 @@ import { env } from '../config/env';
 import { endpoints } from '../lib/api';
 import { allowSensitiveAction } from '../security/biometric';
 import { supabase } from '../lib/supabase';
-import { Avatar, Button, Field, Notice, Panel, ROLE_LABEL, Row, Screen, SectionTitle, Segmented, T, shortDate } from '../ui';
+import { Avatar, Button, Chip, Field, Notice, Panel, ROLE_LABEL, Row, Screen, SectionTitle, Segmented, T, shortDate } from '../ui';
+import { startTour } from '../components/AppTour';
 
 // Same keys and defaults as the web settings page, saved on profiles.notification_prefs
 const PREFS = [
@@ -22,7 +23,7 @@ const DEFAULTS: Record<string, boolean> = {
 };
 
 export const ProfileScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
-  const { session, member, group, signOut, refreshAuth } = useAuth();
+  const { session, member, group, signOut, refreshAuth, userMemberships, switchActiveGroup } = useAuth();
   const { mode, setThemeMode, colors } = useTheme();
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState(member?.profiles?.full_name || '');
@@ -106,7 +107,28 @@ export const ProfileScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
         </View>
         <Button label="Edit name" variant="onForest" size="sm" icon="create-outline" style={{ marginTop: 18, alignSelf: 'flex-start' }} onPress={() => { setFullName(name); setNameError(''); setEditing(true); }} />
       </Panel>
-      <T v="caption" tone="ink3" style={{ marginTop: 10 }}>{group?.name ? `Signed in to ${group.name}.` : ''} To change your phone number, use Settings on the Akibora website.</T>
+      <T v="caption" tone="ink3" style={{ marginTop: 10 }}>To change your phone number, use Settings on the Akibora website.</T>
+
+      <SectionTitle action="Join another" onAction={() => navigation?.navigate?.('JoinAnother')}>Your groups</SectionTitle>
+      <T v="small" tone="ink2" style={{ marginTop: -6, marginBottom: 10 }}>One account works for every chama you're in. Tap one to open it.</T>
+      <Panel style={{ paddingVertical: 4 }}>
+        {userMemberships.filter((m) => m.chamas_v2).map((m, i, all) => {
+          const ch = m.chamas_v2!;
+          const on = ch.id === group?.id;
+          const pending = m.status === 'pending';
+          return (
+            <Row
+              key={ch.id}
+              icon={on ? 'checkmark-circle' : 'people-outline'}
+              title={ch.name}
+              subtitle={pending ? 'Waiting for approval' : `${ROLE_LABEL[m.role] ?? m.role}${on ? ' · open now' : ''}`}
+              right={pending ? <Chip kind="late" label="Pending" /> : undefined}
+              onPress={pending || on ? undefined : () => switchActiveGroup(ch.id)}
+              last={i === all.length - 1}
+            />
+          );
+        })}
+      </Panel>
 
       <SectionTitle>Notifications</SectionTitle>
       <Panel style={{ paddingVertical: 4 }}>
@@ -126,6 +148,7 @@ export const ProfileScreen: React.FC<{ navigation?: any }> = ({ navigation }) =>
 
       <SectionTitle>About</SectionTitle>
       <Panel style={{ paddingVertical: 4 }}>
+        <Row icon="sparkles-outline" title="Take the tour again" onPress={startTour} />
         <Row icon="document-text-outline" title="Privacy" onPress={() => Linking.openURL(env.privacyPolicyUrl).catch(() => {})} />
         <Row icon="reader-outline" title="Terms" onPress={() => Linking.openURL(env.termsUrl).catch(() => {})} />
         <Row icon="information-circle-outline" title="Version" right={<T v="small" tone="ink2">{Application.nativeApplicationVersion ?? '-'} ({Application.nativeBuildVersion ?? '-'})</T>} last />

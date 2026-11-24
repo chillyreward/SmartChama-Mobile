@@ -8,7 +8,10 @@ import { fonts } from '../theme/fonts';
 import { Button, Notice, T, Logo } from '../ui';
 import { WaitingForApproval } from './PendingScreen';
 
-export const JoinChamaScreen: React.FC = () => {
+export const JoinChamaScreen: React.FC<{ navigation?: any }> = ({ navigation }) => {
+  // Opened from Profile by someone already in a group: they are joining another one
+  const another = !!navigation?.canGoBack?.() && !!navigation?.getState?.()?.routes?.some((r: any) => r.name === 'MainTabs');
+  const [joinedNote, setJoinedNote] = useState('');
   const { member, group, signOut, refreshAuth } = useAuth();
   const { colors } = useTheme();
   const [code, setCode] = useState('');
@@ -24,7 +27,11 @@ export const JoinChamaScreen: React.FC = () => {
       // Group code -> request awaiting an official's approval;
       // personal invite token -> joins straight away.
       const data = await endpoints.joinChama(code.trim().toUpperCase());
-      if (data.pending) setPendingNote(`Your request to join ${data.chamaName || 'the group'} is with its officials. The group opens for you once one of them approves it.`);
+      const note = data.pending
+        ? `Your request to join ${data.chamaName || 'the group'} is with its officials. It opens for you once one of them approves it.`
+        : `You're in ${data.chamaName || 'the group'}. Switch to it from Your groups on your profile.`;
+      if (another) setJoinedNote(note);
+      else if (data.pending) setPendingNote(note);
       await refreshAuth();
     } catch (e: any) {
       setError(e?.message || 'That code did not work. Check it with your official and try again.');
@@ -33,7 +40,7 @@ export const JoinChamaScreen: React.FC = () => {
     }
   };
 
-  if (member?.status === 'pending' || pendingNote) {
+  if (!another && (member?.status === 'pending' || pendingNote)) {
     return <WaitingForApproval groupName={group?.name} note={pendingNote || undefined} />;
   }
 
@@ -42,7 +49,7 @@ export const JoinChamaScreen: React.FC = () => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: 22, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
           <Logo />
-          <T v="hero" style={{ marginTop: 36 }}>Join your group</T>
+          <T v="hero" style={{ marginTop: 36 }}>{another ? 'Join another group' : 'Join your group'}</T>
           <T v="body" tone="ink2" style={{ marginTop: 10 }}>Type the code your chair or treasurer shared. An official approves each new member.</T>
 
           <View style={{ marginTop: 28, gap: 8 }}>
@@ -59,11 +66,14 @@ export const JoinChamaScreen: React.FC = () => {
             />
           </View>
           {error ? <View style={{ marginTop: 14 }}><Notice tone="danger">{error}</Notice></View> : null}
+          {joinedNote ? <View style={{ marginTop: 14 }}><Notice tone="ok">{joinedNote}</Notice></View> : null}
           <Button label="Join the group" size="lg" loading={loading} disabled={!code.trim()} style={{ marginTop: 18 }} onPress={join} />
 
           <View style={{ flex: 1, minHeight: 32 }} />
           <T v="small" tone="ink2" style={{ textAlign: 'center' }}>No code? Ask an official in your group.</T>
-          <Button label="Sign out" variant="ghost" onPress={signOut} style={{ marginTop: 6 }} />
+          {another
+            ? <Button label="Back" variant="ghost" onPress={() => navigation.goBack()} style={{ marginTop: 6 }} />
+            : <Button label="Sign out" variant="ghost" onPress={signOut} style={{ marginTop: 6 }} />}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

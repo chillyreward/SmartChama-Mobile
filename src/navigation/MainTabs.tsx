@@ -11,6 +11,7 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { MoreScreen } from '../screens/MoreScreen';
 import { useTheme } from '../contexts/ThemeContext';
 import { fonts } from '../theme/fonts';
+import { AppTour } from '../components/AppTour';
 
 const Tab = createBottomTabNavigator();
 
@@ -85,6 +86,7 @@ function AkiboraTabBar({ state, navigation }: BottomTabBarProps) {
 
 export const MainTabs: React.FC = () => {
   return (
+    <>
     <Tab.Navigator tabBar={(props) => <AkiboraTabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tab.Screen name="Home" component={DashboardScreen} />
       <Tab.Screen name="Wallet" component={WalletScreen} />
@@ -92,6 +94,8 @@ export const MainTabs: React.FC = () => {
       {features.groupChat && <Tab.Screen name="Chat" component={ChatScreen} />}
       <Tab.Screen name="More" component={MoreScreen} />
     </Tab.Navigator>
+    <AppTour />
+    </>
   );
 };
 
